@@ -32,9 +32,9 @@ services:
     container_name: postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=codeatlas
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-codeatlas}
     ports:
       - "5432:5432"
     volumes:
@@ -55,6 +55,10 @@ services:
       context: ./parser-service
     container_name: parser-service
     restart: unless-stopped
+    environment:
+      - PARSER_API_KEY=${PARSER_API_KEY}
+      - PARSER_ALLOWED_REPO_ROOT=${PARSER_ALLOWED_REPO_ROOT:-/projects}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
     ports:
       - "8000:8000"
     volumes:

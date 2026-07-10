@@ -16,6 +16,8 @@ def get_parser(language_str: str) -> Parser:
         parser.set_language(JS_LANGUAGE)
     elif language_str == 'typescript':
         parser.set_language(TS_LANGUAGE)
+    else:
+        raise ValueError(f"Unsupported language: {language_str}")
     return parser
 
 def extract_chunks_and_imports(file_path: str, language_str: str):

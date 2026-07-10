@@ -2,8 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install gcc and g++ for compiling tree-sitter C extensions
-RUN apt-get update && apt-get install -y gcc g++ && rm -rf /var/lib/apt/lists/*
+# Install gcc, g++, and git for tree-sitter C extensions and GitPython
+RUN apt-get update && apt-get install -y gcc g++ git && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
