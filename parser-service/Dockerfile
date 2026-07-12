@@ -7,7 +7,10 @@ RUN apt-get update && apt-get install -y gcc g++ git && rm -rf /var/lib/apt/list
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
+# Install semgrep in an isolated virtual environment to prevent dependency conflicts with FastAPI
+RUN python -m venv /opt/semgrep-venv
+RUN /opt/semgrep-venv/bin/pip install --no-cache-dir semgrep
+RUN ln -s /opt/semgrep-venv/bin/semgrep /usr/local/bin/semgrep
 COPY . .
 
 EXPOSE 8000

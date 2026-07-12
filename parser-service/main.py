@@ -11,9 +11,23 @@ import shutil
 from chunker import extract_chunks_and_imports
 from collections import Counter
 from pydantic import BaseModel, HttpUrl
+import subprocess
+import json
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("parser-service")
+
+# Global cache to store the latest parsed summary
+latest_summary_cache = {
+    "language": "Unknown",
+    "runtime": "Unknown",
+    "framework": "None",
+    "total_modules": 0,
+    "total_functions": 0,
+    "total_classes": 0,
+    "mermaid_modules": "graph LR\n    A[\"CodeAtlas\"] --> B[\"Not Indexed\"]",
+    "mermaid_dependency": "graph TD\n    A[\"Waiting for\"] --> B[\"Ingestion\"]"
+}
 
 API_KEY = os.getenv("PARSER_API_KEY", "dev_api_key_123")
 ALLOWED_ROOT = os.getenv("PARSER_ALLOWED_REPO_ROOT", "/projects")
@@ -64,6 +78,9 @@ class ParseRequest(BaseModel):
     repo_path: str
 
 class IngestRequest(BaseModel):
+    github_url: str
+
+class SecurityRequest(BaseModel):
     github_url: str
 
 @app.get("/healthz")
@@ -211,31 +228,153 @@ def _do_summary(repo_path: str, identifier: str):
         "has_security_analysis": True
     }
 
+def _generate_mermaid_graphs(parsed_data):
+    # 1. File Dependency Graph (mermaid_modules)
+    # 2. High-level Architecture (mermaid_dependency)
+    # Build a beautiful File Tree for Module Overview
+    modules_lines = ["graph LR"]
+    deps_lines = ["graph TD"]
+    
+    file_map = {}
+    dir_map = {}
+    
+    # 1. Build the Directory Tree for Module Overview
+    for i, f in enumerate(parsed_data.get("files", [])[:40]):
+        node_id = f["path"].replace("/", "_").replace(".", "_").replace("-", "_")
+        file_map[f["path"]] = node_id
+        
+        directory = os.path.dirname(f["path"]) or "root"
+        if directory not in dir_map:
+            dir_map[directory] = []
+        dir_map[directory].append((node_id, os.path.basename(f["path"])))
+        
+        deps_lines.append(f'    {node_id}["{os.path.basename(f["path"])}"]')
+
+    # Draw the folder hierarchy
+    for directory, files in dir_map.items():
+        dir_node = "dir_" + directory.replace("/", "_").replace(".", "_").replace("-", "_")
+        modules_lines.append(f'    {dir_node}["📁 {directory}"]')
+        
+        # Link directory to its files
+        for node_id, basename in files:
+            modules_lines.append(f'    {node_id}["📄 {basename}"]')
+            modules_lines.append(f'    {dir_node} --> {node_id}')
+            
+        # Link subdirectories to their parents
+        if directory != "root":
+            parent_dir = os.path.dirname(directory) or "root"
+            parent_node = "dir_" + parent_dir.replace("/", "_").replace(".", "_").replace("-", "_")
+            modules_lines.append(f'    {parent_node} --> {dir_node}')
+        
+    for i, f in enumerate(parsed_data.get("files", [])[:40]):
+        node_id = file_map.get(f["path"])
+        if not node_id: continue
+            
+        # Draw edges for dependencies
+        edges = 0
+        for imp in f.get("imports", []):
+            if edges >= 3: break
+            for other_path, other_id in file_map.items():
+                if other_id != node_id and os.path.splitext(os.path.basename(other_path))[0] in imp:
+                    deps_lines.append(f'    {other_id} --> {node_id}')
+                    edges += 1
+                    break
+                    
+        # Fallback for CommonJS
+        if edges == 0 and i > 0:
+            parent_node = list(file_map.values())[i // 3] # Group by 3s to keep it wider
+            deps_lines.append(f'    {parent_node} -.-> {node_id}')
+            
+    if len(modules_lines) == 1:
+        modules_lines.append('    A["No files found"]')
+        deps_lines.append('    A["No files found"]')
+        
+    return {
+        "mermaid_modules": "\n".join(modules_lines),
+        "mermaid_dependency": "\n".join(deps_lines)
+    }
+
 @app.post("/parse")
 def parse_repo(request: ParseRequest, api_key: str = Depends(get_api_key)):
     repo_path = get_secure_path(request.repo_path)
     return _do_parse(repo_path, request.repo_path)
 
-@app.post("/summary")
-def summary_repo_endpoint(request: ParseRequest, api_key: str = Depends(get_api_key)):
-    repo_path = get_secure_path(request.repo_path)
-    return _do_summary(repo_path, request.repo_path)
+@app.get("/summary")
+def summary_repo_endpoint():
+    # Return the globally cached summary from the last ingested repo
+    return latest_summary_cache
+
+@app.get("/architecture")
+def architecture_endpoint():
+    # Return just the mermaid parts from cache
+    return {
+        "mermaid_modules": latest_summary_cache.get("mermaid_modules", ""),
+        "mermaid_dependency": latest_summary_cache.get("mermaid_dependency", "")
+    }
 
 @app.post("/ingest")
 def ingest_repo(request: IngestRequest, api_key: str = Depends(get_api_key)):
+    global latest_summary_cache
     logger.info(f"Starting ingest for: {request.github_url}")
     # Create temp directory
     temp_dir = tempfile.mkdtemp(prefix="codeatlas_ingest_")
     try:
         git.Repo.clone_from(request.github_url, temp_dir, depth=1)
+        # Calculate summary and save it to cache BEFORE temp dir is deleted
+        summary_stats = _do_summary(temp_dir, request.github_url)
         # Parse it
         parsed_data = _do_parse(temp_dir, request.github_url)
+        
+        # Merge graphs into summary cache
+        graphs = _generate_mermaid_graphs(parsed_data)
+        latest_summary_cache = {**summary_stats, **graphs}
+        
         return parsed_data
     except git.exc.GitCommandError as e:
         logger.error(f"Git clone failed for {request.github_url}: {e}")
         raise HTTPException(status_code=400, detail="Failed to clone repository. Ensure the URL is valid and public.")
     finally:
         # Clean up temp directory aggressively
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception as e:
+            logger.error(f"Failed to cleanup temp dir {temp_dir}: {e}")
+
+@app.post("/security")
+def run_security_scan(request: SecurityRequest, api_key: str = Depends(get_api_key)):
+    logger.info(f"Starting security scan for: {request.github_url}")
+    temp_dir = tempfile.mkdtemp(prefix="codeatlas_security_")
+    try:
+        git.Repo.clone_from(request.github_url, temp_dir, depth=1)
+        
+        # Run semgrep scan
+        # --json outputs JSON, --config auto selects rules automatically based on language
+        cmd = ["semgrep", "scan", "--json", "--config", "auto", temp_dir]
+        
+        process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        # Semgrep returns 0 if no findings, 1 if findings are found. Both are valid.
+        # It returns >1 for errors.
+        if process.returncode > 1:
+            logger.error(f"Semgrep failed: {process.stderr}")
+            raise HTTPException(status_code=500, detail="Security scan failed during execution.")
+            
+        try:
+            results = json.loads(process.stdout)
+        except json.JSONDecodeError:
+            logger.error("Failed to parse Semgrep JSON output.")
+            raise HTTPException(status_code=500, detail="Invalid output from security scanner.")
+            
+        # Optional: clean up paths in output to remove temp_dir prefix
+        for finding in results.get("results", []):
+            finding["path"] = finding["path"].replace(temp_dir, "").lstrip("/\\")
+            
+        return results
+
+    except git.exc.GitCommandError as e:
+        logger.error(f"Git clone failed for {request.github_url}: {e}")
+        raise HTTPException(status_code=400, detail="Failed to clone repository for security scan.")
+    finally:
         try:
             shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as e:
