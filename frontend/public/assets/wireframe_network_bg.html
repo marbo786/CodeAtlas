@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wireframe Network Background</title>
+<style>
+  :root{
+    --bg: #050b12;
+    --line: #2c7a8c;
+    --node: #4fd1e0;
+    --pulse: #d6fbff;
+    --pulse-b: #6ee7d8;
+    --mesh: #1c3540;
+    --label: #5f9aa6;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); overflow:hidden; font-family:'Segoe UI',system-ui,sans-serif; }
+
+  #network-bg{
+    position:fixed; inset:0; width:100%; height:100%; z-index:0;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(24,60,72,0.3), transparent 60%),
+      radial-gradient(ellipse at 75% 80%, rgba(24,60,72,0.22), transparent 55%),
+      var(--bg);
+  }
+  #network-bg::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(5,11,18,0.6) 100%);
+  }
+  #network-bg svg{
+    width:100%; height:100%; display:block;
+    transition: transform 0.3s ease-out;
+  }
+
+  .sheath{ fill:none; stroke:var(--node); opacity:0.11; filter:url(#bigBlur); stroke-linecap:round; }
+  .sheath.dim{ opacity:0.05; }
+  .strand{ fill:none; stroke-width:1.1; opacity:0.5; filter:url(#softGlow); stroke-linecap:round; }
+  .strand.s1{ stroke:var(--node); }
+  .strand.s2{ stroke:var(--line); opacity:0.4; }
+  .strand.s3{ stroke:var(--node); }
+  .strand.dim{ opacity:0.25; }
+
+  .pulse{ fill:var(--pulse); filter:url(#hotGlow); }
+  .pulse-b{ fill:var(--pulse-b); filter:url(#hotGlow); }
+
+  .node-shape{
+    stroke:var(--node); stroke-width:1.1; fill:rgba(79,209,224,0.04);
+    filter:url(#softGlow); transform-box:fill-box; transform-origin:center;
+    animation: breathe 5.5s ease-in-out infinite;
+  }
+  .node-shape.hub{ stroke-width:1.4; fill:rgba(79,209,224,0.07); }
+  .d2{ animation-delay:-1.2s; } .d3{ animation-delay:-2.4s; }
+  .d4{ animation-delay:-3.6s; } .d5{ animation-delay:-0.6s; }
+  @keyframes breathe{ 0%,100%{opacity:0.55;} 50%{opacity:1;} }
+
+  .ring{
+    fill:none; stroke:var(--pulse); stroke-width:1.3; opacity:0.5;
+    filter:url(#hotGlow); transform-box:fill-box; transform-origin:center;
+    animation: ringPulse 3.2s ease-in-out infinite;
+  }
+  @keyframes ringPulse{ 0%,100%{opacity:0.22;} 50%{opacity:0.65;} }
+
+  .mesh-line{ stroke:var(--mesh); stroke-width:0.6; opacity:0.45; }
+  .mesh-dot{ fill:var(--mesh); opacity:0.6; }
+  #mesh-tl, #mesh-br{ animation: drift 40s ease-in-out infinite; }
+  #mesh-br{ animation-duration:52s; animation-direction:reverse; }
+  @keyframes drift{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(6px,-8px);} }
+
+  .label{
+    fill:var(--label); font-family:'Courier New',monospace; font-size:9px;
+    letter-spacing:1.5px; opacity:0.35; text-transform:uppercase;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .node-shape, .ring, #mesh-tl, #mesh-br{ animation:none; }
+    .pulse, .pulse-b{ display:none; }
+  }
+
+  .demo{
+    position:relative; z-index:1; height:100%; display:flex; flex-direction:column;
+    align-items:flex-start; justify-content:center; padding:6vw; color:#eafcff;
+  }
+  .demo h1{ margin:0 0 .4rem; font-size:clamp(2rem,5vw,3.4rem); font-weight:600; letter-spacing:0.01em; }
+  .demo p{ margin:0; max-width:34ch; color:#8fb9c2; font-size:1.05rem; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<div id="network-bg">
+  <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="1.5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="hotGlow" x="-200%" y="-200%" width="500%" height="500%">
+        <feGaussianBlur stdDeviation="2.6" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <filter id="bigBlur" x="-100%" y="-100%" width="300%" height="300%">
+        <feGaussianBlur stdDeviation="4.5"/>
+      </filter>
+
+      <symbol id="cubeShape" viewBox="0 0 40 40">
+        <path d="M20 2 L36 11 L20 20 L4 11 Z"/>
+        <path d="M4 11 L20 20 L20 38 L4 29 Z"/>
+        <path d="M36 11 L20 20 L20 38 L36 29 Z"/>
+      </symbol>
+      <symbol id="sphereShape" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="16"/>
+        <ellipse cx="20" cy="20" rx="16" ry="6"/>
+        <ellipse cx="20" cy="20" rx="16" ry="6" transform="rotate(60 20 20)"/>
+        <ellipse cx="20" cy="20" rx="16" ry="6" transform="rotate(120 20 20)"/>
+      </symbol>
+      <symbol id="octaShape" viewBox="0 0 40 40">
+        <path d="M20 2 L36 20 L20 38 L4 20 Z"/>
+        <path d="M20 2 L20 38 M4 20 L36 20"/>
+      </symbol>
+      <symbol id="cylinderShape" viewBox="0 0 40 40">
+        <ellipse cx="20" cy="10" rx="15" ry="6"/>
+        <path d="M5 10 L5 30 A15 6 0 0 0 35 30 L35 10"/>
+        <ellipse cx="20" cy="30" rx="15" ry="6" opacity="0.5"/>
+      </symbol>
+      <symbol id="diskStackShape" viewBox="0 0 40 40">
+        <ellipse cx="20" cy="10" rx="15" ry="5"/>
+        <path d="M5 10 L5 18 A15 5 0 0 0 35 18 L35 10"/>
+        <ellipse cx="20" cy="18" rx="15" ry="5" opacity="0.7"/>
+        <path d="M5 18 L5 26 A15 5 0 0 0 35 26 L35 18"/>
+        <ellipse cx="20" cy="26" rx="15" ry="5" opacity="0.5"/>
+        <path d="M5 26 L5 30 A15 5 0 0 0 35 30 L35 26"/>
+      </symbol>
+    </defs>
+
+    <g id="mesh-tl">
+      <path class="mesh-line" d="M0,40 L90,10 L170,70 L260,20"/>
+      <path class="mesh-line" d="M90,10 L120,90 L260,20"/>
+      <path class="mesh-line" d="M0,140 L120,90 L170,70"/>
+      <circle class="mesh-dot" cx="90" cy="10" r="2"/>
+      <circle class="mesh-dot" cx="170" cy="70" r="2"/>
+      <circle class="mesh-dot" cx="260" cy="20" r="2"/>
+      <circle class="mesh-dot" cx="120" cy="90" r="2"/>
+    </g>
+    <g id="mesh-br" transform="translate(1300,650)">
+      <path class="mesh-line" d="M0,260 L100,220 L180,270 L260,210"/>
+      <path class="mesh-line" d="M100,220 L140,150 L260,210"/>
+      <path class="mesh-line" d="M20,180 L140,150 L180,270"/>
+      <circle class="mesh-dot" cx="100" cy="220" r="2"/>
+      <circle class="mesh-dot" cx="180" cy="270" r="2"/>
+      <circle class="mesh-dot" cx="140" cy="150" r="2"/>
+      <circle class="mesh-dot" cx="260" cy="210" r="2"/>
+    </g>
+
+    <path class="sheath dim" stroke-width="6" d="M295.0,515.0 C332.8,532.6 356.0,564.9 379.0,599.0"/>
+        <path class="strand s1 dim" d="M295.0,515.0 C331.1,534.3 355.0,565.9 379.0,599.0"/>
+        <path class="strand s2 dim" d="M295.0,515.0 C332.8,532.6 356.0,564.9 379.0,599.0"/>
+        <path class="strand s3 dim" d="M295.0,515.0 C334.5,530.9 357.0,563.9 379.0,599.0"/>
+        <path class="sheath dim" stroke-width="6" d="M379.0,599.0 C439.8,553.1 468.9,486.7 497.0,417.0"/>
+        <path class="strand s1 dim" d="M379.0,599.0 C441.8,554.4 470.1,487.5 497.0,417.0"/>
+        <path class="strand s2 dim" d="M379.0,599.0 C439.8,553.1 468.9,486.7 497.0,417.0"/>
+        <path class="strand s3 dim" d="M379.0,599.0 C437.8,551.8 467.7,485.9 497.0,417.0"/>
+        <path class="sheath dim" stroke-width="6" d="M497.0,417.0 C534.5,357.8 593.2,326.1 655.0,295.0"/>
+        <path class="strand s1 dim" d="M497.0,417.0 C536.0,359.7 594.1,327.2 655.0,295.0"/>
+        <path class="strand s2 dim" d="M497.0,417.0 C534.5,357.8 593.2,326.1 655.0,295.0"/>
+        <path class="strand s3 dim" d="M497.0,417.0 C533.0,355.9 592.3,324.9 655.0,295.0"/>
+        <path class="sheath dim" stroke-width="6" d="M655.0,295.0 C712.3,245.0 783.2,230.2 857.0,217.0"/>
+        <path class="strand s1 dim" d="M655.0,295.0 C713.2,247.3 783.7,231.5 857.0,217.0"/>
+        <path class="strand s2 dim" d="M655.0,295.0 C712.3,245.0 783.2,230.2 857.0,217.0"/>
+        <path class="strand s3 dim" d="M655.0,295.0 C711.4,242.8 782.7,228.8 857.0,217.0"/>
+        <path class="sheath dim" stroke-width="6" d="M857.0,217.0 C907.1,171.9 969.7,157.7 1035.0,145.0"/>
+        <path class="strand s1 dim" d="M857.0,217.0 C908.0,174.1 970.3,159.1 1035.0,145.0"/>
+        <path class="strand s2 dim" d="M857.0,217.0 C907.1,171.9 969.7,157.7 1035.0,145.0"/>
+        <path class="strand s3 dim" d="M857.0,217.0 C906.2,169.7 969.2,156.4 1035.0,145.0"/>
+        <path class="sheath dim" stroke-width="6" d="M1035.0,145.0 C1112.3,152.2 1179.9,122.2 1249.0,89.0"/>
+        <path class="strand s1 dim" d="M1035.0,145.0 C1112.9,154.5 1180.3,123.6 1249.0,89.0"/>
+        <path class="strand s2 dim" d="M1035.0,145.0 C1112.3,152.2 1179.9,122.2 1249.0,89.0"/>
+        <path class="strand s3 dim" d="M1035.0,145.0 C1111.7,149.9 1179.6,120.8 1249.0,89.0"/>
+        <path class="sheath dim" stroke-width="6" d="M379.0,599.0 C460.3,591.2 524.2,546.9 589.0,499.0"/>
+        <path class="strand s1 dim" d="M379.0,599.0 C461.3,593.4 524.8,548.2 589.0,499.0"/>
+        <path class="strand s2 dim" d="M379.0,599.0 C460.3,591.2 524.2,546.9 589.0,499.0"/>
+        <path class="strand s3 dim" d="M379.0,599.0 C459.3,589.0 523.6,545.6 589.0,499.0"/>
+        <path class="sheath dim" stroke-width="6" d="M589.0,499.0 C667.4,490.9 728.8,447.7 791.0,401.0"/>
+        <path class="strand s1 dim" d="M589.0,499.0 C668.5,493.1 729.4,448.9 791.0,401.0"/>
+        <path class="strand s2 dim" d="M589.0,499.0 C667.4,490.9 728.8,447.7 791.0,401.0"/>
+        <path class="strand s3 dim" d="M589.0,499.0 C666.4,488.7 728.2,446.4 791.0,401.0"/>
+        <path class="sheath dim" stroke-width="6" d="M589.0,499.0 C603.4,431.7 646.7,382.6 693.0,333.0"/>
+        <path class="strand s1 dim" d="M589.0,499.0 C605.4,433.0 647.9,383.3 693.0,333.0"/>
+        <path class="strand s2 dim" d="M589.0,499.0 C603.4,431.7 646.7,382.6 693.0,333.0"/>
+        <path class="strand s3 dim" d="M589.0,499.0 C601.4,430.5 645.5,381.8 693.0,333.0"/>
+        <path class="sheath dim" stroke-width="6" d="M791.0,401.0 C839.0,374.8 866.7,330.6 894.0,284.0"/>
+        <path class="strand s1 dim" d="M791.0,401.0 C840.8,376.3 867.8,331.5 894.0,284.0"/>
+        <path class="strand s2 dim" d="M791.0,401.0 C839.0,374.8 866.7,330.6 894.0,284.0"/>
+        <path class="strand s3 dim" d="M791.0,401.0 C837.2,373.2 865.6,329.6 894.0,284.0"/>
+        <path class="sheath dim" stroke-width="6" d="M970.0,280.0 C996.7,260.9 1010.1,232.7 1023.0,203.0"/>
+        <path class="strand s1 dim" d="M970.0,280.0 C998.7,262.3 1011.2,233.5 1023.0,203.0"/>
+        <path class="strand s2 dim" d="M970.0,280.0 C996.7,260.9 1010.1,232.7 1023.0,203.0"/>
+        <path class="strand s3 dim" d="M970.0,280.0 C994.8,259.6 1008.9,231.9 1023.0,203.0"/>
+        <path class="sheath dim" stroke-width="6" d="M1150.0,200.0 C1167.8,238.2 1200.5,261.7 1235.0,285.0"/>
+        <path class="strand s1 dim" d="M1150.0,200.0 C1166.2,239.9 1199.5,262.7 1235.0,285.0"/>
+        <path class="strand s2 dim" d="M1150.0,200.0 C1167.8,238.2 1200.5,261.7 1235.0,285.0"/>
+        <path class="strand s3 dim" d="M1150.0,200.0 C1169.5,236.6 1201.5,260.7 1235.0,285.0"/>
+        <path class="sheath dim" stroke-width="6" d="M898.0,598.0 C987.2,577.8 1051.8,519.4 1117.0,457.0"/>
+        <path class="strand s1 dim" d="M898.0,598.0 C988.5,579.8 1052.6,520.6 1117.0,457.0"/>
+        <path class="strand s2 dim" d="M898.0,598.0 C987.2,577.8 1051.8,519.4 1117.0,457.0"/>
+        <path class="strand s3 dim" d="M898.0,598.0 C985.9,575.7 1051.1,518.2 1117.0,457.0"/>
+        <path class="sheath dim" stroke-width="6" d="M53.0,593.0 C55.3,656.6 86.8,708.4 121.0,761.0"/>
+        <path class="strand s1 dim" d="M53.0,593.0 C53.1,657.5 85.5,708.9 121.0,761.0"/>
+        <path class="strand s2 dim" d="M53.0,593.0 C55.3,656.6 86.8,708.4 121.0,761.0"/>
+        <path class="strand s3 dim" d="M53.0,593.0 C57.5,655.7 88.1,707.8 121.0,761.0"/>
+        <path class="sheath dim" stroke-width="6" d="M233.0,653.0 C209.0,702.1 166.2,731.7 121.0,761.0"/>
+        <path class="strand s1 dim" d="M233.0,653.0 C207.3,700.4 165.2,730.6 121.0,761.0"/>
+        <path class="strand s2 dim" d="M233.0,653.0 C209.0,702.1 166.2,731.7 121.0,761.0"/>
+        <path class="strand s3 dim" d="M233.0,653.0 C210.7,703.8 167.2,732.7 121.0,761.0"/>
+        <path class="sheath dim" stroke-width="6" d="M233.0,653.0 C270.0,614.9 283.0,566.0 295.0,515.0"/>
+        <path class="strand s1 dim" d="M233.0,653.0 C272.2,615.9 284.3,566.6 295.0,515.0"/>
+        <path class="strand s2 dim" d="M233.0,653.0 C270.0,614.9 283.0,566.0 295.0,515.0"/>
+        <path class="strand s3 dim" d="M233.0,653.0 C267.8,613.9 281.7,565.4 295.0,515.0"/>
+        <path class="sheath dim" stroke-width="6" d="M473.0,533.0 C449.9,566.1 415.3,582.8 379.0,599.0"/>
+        <path class="strand s1 dim" d="M473.0,533.0 C448.5,564.1 414.5,581.6 379.0,599.0"/>
+        <path class="strand s2 dim" d="M473.0,533.0 C449.9,566.1 415.3,582.8 379.0,599.0"/>
+        <path class="strand s3 dim" d="M473.0,533.0 C451.3,568.0 416.1,583.9 379.0,599.0"/>
+        <path class="sheath dim" stroke-width="6" d="M657.0,717.0 C618.4,634.2 547.7,583.4 473.0,533.0"/>
+        <path class="strand s1 dim" d="M657.0,717.0 C620.1,632.5 548.7,582.4 473.0,533.0"/>
+        <path class="strand s2 dim" d="M657.0,717.0 C618.4,634.2 547.7,583.4 473.0,533.0"/>
+        <path class="strand s3 dim" d="M657.0,717.0 C616.7,635.9 546.7,584.4 473.0,533.0"/>
+        <path class="sheath" stroke-width="9" d="M121.0,761.0 C293.8,696.6 472.5,704.6 657.0,717.0"/>
+        <path class="strand s1" d="M121.0,761.0 C294.1,700.1 472.7,706.6 657.0,717.0"/>
+        <path class="strand s2" d="M121.0,761.0 C293.8,696.6 472.5,704.6 657.0,717.0"/>
+        <path class="strand s3" d="M121.0,761.0 C293.5,693.2 472.3,702.5 657.0,717.0"/>
+        <path class="sheath" stroke-width="9" d="M657.0,717.0 C755.6,716.3 826.5,659.7 898.0,598.0"/>
+        <path class="strand s1" d="M657.0,717.0 C757.1,719.4 827.5,661.6 898.0,598.0"/>
+        <path class="strand s2" d="M657.0,717.0 C755.6,716.3 826.5,659.7 898.0,598.0"/>
+        <path class="strand s3" d="M657.0,717.0 C754.0,713.2 825.6,657.8 898.0,598.0"/>
+        <path class="sheath" stroke-width="9" d="M898.0,598.0 C831.2,550.1 810.0,477.4 791.0,401.0"/>
+        <path class="strand s1" d="M898.0,598.0 C834.2,548.4 811.9,476.4 791.0,401.0"/>
+        <path class="strand s2" d="M898.0,598.0 C831.2,550.1 810.0,477.4 791.0,401.0"/>
+        <path class="strand s3" d="M898.0,598.0 C828.1,551.8 808.2,478.4 791.0,401.0"/>
+        <path class="sheath" stroke-width="11" d="M121.0,761.0 C235.3,754.0 307.3,679.6 379.0,599.0"/>
+        <path class="strand s1" d="M121.0,761.0 C237.7,757.8 308.8,681.9 379.0,599.0"/>
+        <path class="strand s2" d="M121.0,761.0 C235.3,754.0 307.3,679.6 379.0,599.0"/>
+        <path class="strand s3" d="M121.0,761.0 C232.9,750.2 305.9,677.3 379.0,599.0"/>
+        <path class="sheath" stroke-width="11" d="M379.0,599.0 C489.0,479.6 636.6,438.6 791.0,401.0"/>
+        <path class="strand s1" d="M379.0,599.0 C490.9,483.6 637.8,441.0 791.0,401.0"/>
+        <path class="strand s2" d="M379.0,599.0 C489.0,479.6 636.6,438.6 791.0,401.0"/>
+        <path class="strand s3" d="M379.0,599.0 C487.0,475.5 635.5,436.1 791.0,401.0"/>
+        <path class="sheath" stroke-width="11" d="M791.0,401.0 C828.3,328.9 897.2,303.4 970.0,280.0"/>
+        <path class="strand s1" d="M791.0,401.0 C830.8,332.6 898.7,305.7 970.0,280.0"/>
+        <path class="strand s2" d="M791.0,401.0 C828.3,328.9 897.2,303.4 970.0,280.0"/>
+        <path class="strand s3" d="M791.0,401.0 C825.8,325.1 895.6,301.2 970.0,280.0"/>
+        <path class="sheath" stroke-width="11" d="M970.0,280.0 C1015.0,221.2 1080.9,209.4 1150.0,200.0"/>
+        <path class="strand s1" d="M970.0,280.0 C1016.8,225.3 1082.0,211.8 1150.0,200.0"/>
+        <path class="strand s2" d="M970.0,280.0 C1015.0,221.2 1080.9,209.4 1150.0,200.0"/>
+        <path class="strand s3" d="M970.0,280.0 C1013.2,217.1 1079.8,206.9 1150.0,200.0"/>
+        <path class="sheath" stroke-width="11" d="M1150.0,200.0 C1188.6,142.1 1249.7,127.0 1314.0,114.0"/>
+        <path class="strand s1" d="M1150.0,200.0 C1190.7,146.1 1251.0,129.4 1314.0,114.0"/>
+        <path class="strand s2" d="M1150.0,200.0 C1188.6,142.1 1249.7,127.0 1314.0,114.0"/>
+        <path class="strand s3" d="M1150.0,200.0 C1186.6,138.1 1248.5,124.6 1314.0,114.0"/>
+
+    <use href="#cubeShape" class="node-shape hub" x="100" y="740" width="42" height="42"/>
+        <use href="#cubeShape" class="node-shape hub d2" x="360" y="580" width="38" height="38"/>
+        <use href="#sphereShape" class="node-shape d3" x="570" y="480" width="38" height="38"/>
+        <use href="#octaShape" class="node-shape hub d4" x="770" y="380" width="42" height="42"/>
+        <use href="#cubeShape" class="node-shape hub d5" x="950" y="260" width="40" height="40"/>
+        <use href="#cubeShape" class="node-shape hub" x="1130" y="180" width="40" height="40"/>
+        <use href="#cubeShape" class="node-shape hub d2" x="1290" y="90" width="48" height="48"/>
+        <use href="#sphereShape" class="node-shape d3" x="640" y="700" width="34" height="34"/>
+        <use href="#cylinderShape" class="node-shape d4" x="880" y="580" width="36" height="36"/>
+        <use href="#diskStackShape" class="node-shape d5" x="1100" y="440" width="34" height="34"/>
+        <use href="#cubeShape" class="node-shape" x="280" y="500" width="30" height="30"/>
+        <use href="#octaShape" class="node-shape d2" x="480" y="400" width="34" height="34"/>
+        <use href="#sphereShape" class="node-shape d3" x="640" y="280" width="30" height="30"/>
+        <use href="#cubeShape" class="node-shape d4" x="840" y="200" width="34" height="34"/>
+        <use href="#cubeShape" class="node-shape d5" x="1020" y="130" width="30" height="30"/>
+        <use href="#cylinderShape" class="node-shape" x="1230" y="70" width="38" height="38"/>
+        <use href="#cubeShape" class="node-shape d2" x="220" y="640" width="26" height="26"/>
+        <use href="#sphereShape" class="node-shape d3" x="460" y="520" width="26" height="26"/>
+        <use href="#cubeShape" class="node-shape d4" x="680" y="320" width="26" height="26"/>
+        <use href="#octaShape" class="node-shape d5" x="880" y="270" width="28" height="28"/>
+        <use href="#cubeShape" class="node-shape" x="1010" y="190" width="26" height="26"/>
+        <use href="#diskStackShape" class="node-shape d2" x="1220" y="270" width="30" height="30"/>
+        <use href="#cubeShape" class="node-shape d3" x="40" y="580" width="26" height="26"/>
+
+    <circle class="ring" cx="121" cy="761" r="6.5"/>
+        <circle class="ring" cx="379" cy="599" r="5.5"/>
+        <circle class="ring" cx="791" cy="401" r="6.5"/>
+        <circle class="ring" cx="970" cy="280" r="5.5"/>
+        <circle class="ring" cx="1150" cy="200" r="5.5"/>
+        <circle class="ring" cx="1314" cy="114" r="6.5"/>
+
+    <text class="label" x="83" y="797">DATASTREAM</text>
+        <text class="label" x="753" y="437">JUNCTION_Z</text>
+        <text class="label" x="1112" y="236">MERGE_C</text>
+        <text class="label" x="1276" y="150">OUTPUT</text>
+        <text class="label" x="1079" y="493">CACHE</text>
+
+    <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.55s" begin="2.24s" repeatCount="indefinite"><mpath href="#g8"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.9s" begin="2.52s" repeatCount="indefinite"><mpath href="#g9"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.25s" begin="0.0s" repeatCount="indefinite"><mpath href="#g10"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.6s" begin="0.28s" repeatCount="indefinite"><mpath href="#g11"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.95s" begin="0.56s" repeatCount="indefinite"><mpath href="#g12"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="6.3s" begin="0.84s" repeatCount="indefinite"><mpath href="#g13"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.2s" begin="1.12s" repeatCount="indefinite"><mpath href="#g14"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.55s" begin="1.4s" repeatCount="indefinite"><mpath href="#g15"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.9s" begin="1.68s" repeatCount="indefinite"><mpath href="#g16"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.25s" begin="1.96s" repeatCount="indefinite"><mpath href="#g17"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.6s" begin="2.24s" repeatCount="indefinite"><mpath href="#g18"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.95s" begin="2.52s" repeatCount="indefinite"><mpath href="#g19"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="6.3s" begin="0.0s" repeatCount="indefinite"><mpath href="#g20"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.2s" begin="0.28s" repeatCount="indefinite"><mpath href="#g21"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.55s" begin="0.56s" repeatCount="indefinite"><mpath href="#g22"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="4.9s" begin="0.84s" repeatCount="indefinite"><mpath href="#g23"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.25s" begin="1.12s" repeatCount="indefinite"><mpath href="#g24"/></animateMotion></circle>
+        <circle class="pulse-b" r="1.9" opacity="0.5"><animateMotion dur="5.6s" begin="1.4s" repeatCount="indefinite"><mpath href="#g25"/></animateMotion></circle>
+        <circle class="pulse" r="2.6"><animateMotion dur="3.4s" begin="1.5s" repeatCount="indefinite"><mpath href="#g5"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="4.35s" begin="0.7s" repeatCount="indefinite"><mpath href="#g5"/></animateMotion></circle>
+        <circle class="pulse" r="2.6"><animateMotion dur="3.7s" begin="0.0s" repeatCount="indefinite"><mpath href="#g6"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="4.7s" begin="1.0s" repeatCount="indefinite"><mpath href="#g6"/></animateMotion></circle>
+        <circle class="pulse" r="2.6"><animateMotion dur="4.0s" begin="0.3s" repeatCount="indefinite"><mpath href="#g7"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="5.05s" begin="1.3s" repeatCount="indefinite"><mpath href="#g7"/></animateMotion></circle>
+        <circle class="pulse" r="3.0"><animateMotion dur="3.4s" begin="0.0s" repeatCount="indefinite"><mpath href="#g0"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="4.0s" begin="0.7s" repeatCount="indefinite"><mpath href="#g0"/></animateMotion></circle>
+        <circle class="pulse" r="3.0"><animateMotion dur="3.7s" begin="0.3s" repeatCount="indefinite"><mpath href="#g1"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="4.35s" begin="1.0s" repeatCount="indefinite"><mpath href="#g1"/></animateMotion></circle>
+        <circle class="pulse" r="3.0"><animateMotion dur="4.0s" begin="0.6s" repeatCount="indefinite"><mpath href="#g2"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="4.7s" begin="1.3s" repeatCount="indefinite"><mpath href="#g2"/></animateMotion></circle>
+        <circle class="pulse" r="3.0"><animateMotion dur="4.3s" begin="0.9s" repeatCount="indefinite"><mpath href="#g3"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="5.05s" begin="1.6s" repeatCount="indefinite"><mpath href="#g3"/></animateMotion></circle>
+        <circle class="pulse" r="3.0"><animateMotion dur="4.6s" begin="1.2s" repeatCount="indefinite"><mpath href="#g4"/></animateMotion></circle>
+        <circle class="pulse-b" r="2.2"><animateMotion dur="4.0s" begin="1.9s" repeatCount="indefinite"><mpath href="#g4"/></animateMotion></circle>
+
+    <path id="g8" d="M295.0,515.0 C332.8,532.6 356.0,564.9 379.0,599.0" fill="none" stroke="none"/>
+        <path id="g9" d="M379.0,599.0 C439.8,553.1 468.9,486.7 497.0,417.0" fill="none" stroke="none"/>
+        <path id="g10" d="M497.0,417.0 C534.5,357.8 593.2,326.1 655.0,295.0" fill="none" stroke="none"/>
+        <path id="g11" d="M655.0,295.0 C712.3,245.0 783.2,230.2 857.0,217.0" fill="none" stroke="none"/>
+        <path id="g12" d="M857.0,217.0 C907.1,171.9 969.7,157.7 1035.0,145.0" fill="none" stroke="none"/>
+        <path id="g13" d="M1035.0,145.0 C1112.3,152.2 1179.9,122.2 1249.0,89.0" fill="none" stroke="none"/>
+        <path id="g14" d="M379.0,599.0 C460.3,591.2 524.2,546.9 589.0,499.0" fill="none" stroke="none"/>
+        <path id="g15" d="M589.0,499.0 C667.4,490.9 728.8,447.7 791.0,401.0" fill="none" stroke="none"/>
+        <path id="g16" d="M589.0,499.0 C603.4,431.7 646.7,382.6 693.0,333.0" fill="none" stroke="none"/>
+        <path id="g17" d="M791.0,401.0 C839.0,374.8 866.7,330.6 894.0,284.0" fill="none" stroke="none"/>
+        <path id="g18" d="M970.0,280.0 C996.7,260.9 1010.1,232.7 1023.0,203.0" fill="none" stroke="none"/>
+        <path id="g19" d="M1150.0,200.0 C1167.8,238.2 1200.5,261.7 1235.0,285.0" fill="none" stroke="none"/>
+        <path id="g20" d="M898.0,598.0 C987.2,577.8 1051.8,519.4 1117.0,457.0" fill="none" stroke="none"/>
+        <path id="g21" d="M53.0,593.0 C55.3,656.6 86.8,708.4 121.0,761.0" fill="none" stroke="none"/>
+        <path id="g22" d="M233.0,653.0 C209.0,702.1 166.2,731.7 121.0,761.0" fill="none" stroke="none"/>
+        <path id="g23" d="M233.0,653.0 C270.0,614.9 283.0,566.0 295.0,515.0" fill="none" stroke="none"/>
+        <path id="g24" d="M473.0,533.0 C449.9,566.1 415.3,582.8 379.0,599.0" fill="none" stroke="none"/>
+        <path id="g25" d="M657.0,717.0 C618.4,634.2 547.7,583.4 473.0,533.0" fill="none" stroke="none"/>
+        <path id="g5" d="M121.0,761.0 C293.8,696.6 472.5,704.6 657.0,717.0" fill="none" stroke="none"/>
+        <path id="g6" d="M657.0,717.0 C755.6,716.3 826.5,659.7 898.0,598.0" fill="none" stroke="none"/>
+        <path id="g7" d="M898.0,598.0 C831.2,550.1 810.0,477.4 791.0,401.0" fill="none" stroke="none"/>
+        <path id="g0" d="M121.0,761.0 C235.3,754.0 307.3,679.6 379.0,599.0" fill="none" stroke="none"/>
+        <path id="g1" d="M379.0,599.0 C489.0,479.6 636.6,438.6 791.0,401.0" fill="none" stroke="none"/>
+        <path id="g2" d="M791.0,401.0 C828.3,328.9 897.2,303.4 970.0,280.0" fill="none" stroke="none"/>
+        <path id="g3" d="M970.0,280.0 C1015.0,221.2 1080.9,209.4 1150.0,200.0" fill="none" stroke="none"/>
+        <path id="g4" d="M1150.0,200.0 C1188.6,142.1 1249.7,127.0 1314.0,114.0" fill="none" stroke="none"/>
+  </svg>
+</div>
+
+
+
+<script>
+(function(){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var svg = document.querySelector('#network-bg svg');
+  var ticking = false, tx = 0, ty = 0;
+  
+  function updateTransform() {
+    if (!ticking) {
+      requestAnimationFrame(function(){
+        svg.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(1.02)';
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+})();
+</script>
+
+</body>
+</html>
