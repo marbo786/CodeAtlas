@@ -7,7 +7,6 @@ import ReactMarkdown from 'react-markdown';
 import mermaid from 'mermaid';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MOCK_GENERATED_README } from '@/mock/docs';
 
 // --- CONFIGURABLE ANIMATION VARIABLES ---
 const EDITOR_START = 0;

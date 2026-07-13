@@ -13,6 +13,7 @@ services:
       - N8N_PROTOCOL=http
       - NODE_ENV=production
       - WEBHOOK_URL=http://localhost:5678/
+      - N8N_SECURE_COOKIE=false
       - GENERIC_TIMEZONE=UTC
       - NODES_EXCLUDE=[]
       # Expose docker socket or give it access to run commands (like git, semgrep) 
@@ -33,14 +34,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-codeatlas}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.15.0
     container_name: qdrant
     restart: unless-stopped
     ports:
@@ -62,23 +61,37 @@ services:
     volumes:
       # Mount /tmp to share cloned repos with n8n
       - shared_tmp:/tmp
-      # Mount local workspace for development testing
-      - .:/projects/codeatlas
 
   frontend:
     build:
       context: ./frontend
     container_name: frontend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      - N8N_BASE_URL=http://n8n:5678
+      - N8N_CHAT_PATH=/webhook/chat
     depends_on:
       - parser-service
+
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
 
 volumes:
   n8n_data:
   postgres_data:
   qdrant_data:
   shared_tmp:
+  caddy_data:
+  caddy_config:

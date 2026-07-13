@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 // Removed ScrollArea import
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useChatStore, ChatMessage } from '@/store/useChatStore';
-import { mockStreamResponse } from '@/mock/chat';
 
 // --- CONFIGURABLE ANIMATION VARIABLES ---
 // Initial state parameters for the cinematic entrance
@@ -90,12 +89,7 @@ export function ChatSection() {
         // Assuming n8n returns { output: "..." }
         const text = data.output || data.response || data.text || JSON.stringify(data);
         
-        // Simulate streaming for the UI effect
-        const chunkSize = 4;
-        for (let i = 0; i < text.length; i += chunkSize) {
-          appendStreamChunk(text.slice(i, i + chunkSize));
-          await new Promise(r => setTimeout(r, 10)); // 10ms per chunk
-        }
+        appendStreamChunk(text);
       }
     },
     onSettled: () => {

@@ -72,7 +72,7 @@ Feed it a repo URL, and it will:
                                      ▼
                   ┌────────────────────────────────────┐
                   │              frontend              │
-                  │        vanilla HTML/CSS/JS         │
+                  │ Next.js 15, React 19, TailwindCSS  │
                   │         dark / teal theme          │
                   └────────────────────────────────────┘
 ```
@@ -145,7 +145,7 @@ A thin, read-only REST layer over Postgres for the frontend — repo info, file 
 | Vector store | Qdrant |
 | Relational store | PostgreSQL |
 | Embeddings + LLM | Google Gemini |
-| Frontend | Vanilla HTML / CSS / JS, dark-teal theme |
+| Frontend | Next.js 15, React 19, TailwindCSS, Framer Motion |
 | Infra | Docker Compose |
 
 ---
@@ -154,7 +154,7 @@ A thin, read-only REST layer over Postgres for the frontend — repo info, file 
 
 ```
 CodeAtlas/
-├── frontend/            # vanilla HTML/CSS/JS UI, dark/teal design system
+├── frontend/             # Next.js 15 UI, dark/teal design system
 ├── parser-service/       # FastAPI microservice — clones & parses repos
 ├── sql/                  # Postgres schema / init scripts
 ├── Dockerfile.n8n        # custom n8n image

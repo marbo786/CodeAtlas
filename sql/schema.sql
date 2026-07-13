@@ -37,3 +37,9 @@ CREATE TABLE security_findings (
     line_number INT,
     remediation TEXT
 );
+
+CREATE INDEX idx_files_repo_id ON files(repo_id);
+CREATE INDEX idx_file_deps_repo_id ON file_dependencies(repo_id);
+CREATE INDEX idx_file_deps_from_file ON file_dependencies(from_file_id);
+CREATE INDEX idx_file_deps_to_file ON file_dependencies(to_file_id);
+CREATE INDEX idx_sec_findings_repo_id ON security_findings(repo_id);

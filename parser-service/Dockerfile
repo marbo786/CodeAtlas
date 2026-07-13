@@ -13,6 +13,9 @@ RUN /opt/semgrep-venv/bin/pip install --no-cache-dir semgrep
 RUN ln -s /opt/semgrep-venv/bin/semgrep /usr/local/bin/semgrep
 COPY . .
 
+RUN useradd -m codeatlas && chown -R codeatlas:codeatlas /app
+USER codeatlas
+
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type ChatMessage = {
   id: string;
@@ -16,8 +17,10 @@ interface ChatState {
   sessionId: string;
 }
 
-export const useChatStore = create<ChatState>((set) => ({
-  sessionId: `codeatlas-session-${crypto.randomUUID()}`,
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set) => ({
+      sessionId: `codeatlas-session-${crypto.randomUUID()}`,
   messages: [
     {
       id: 'welcome-msg',
@@ -48,4 +51,9 @@ export const useChatStore = create<ChatState>((set) => ({
   }),
   setStatus: (status) => set({ status }),
   clearMessages: () => set({ messages: [] }),
-}));
+    }),
+    {
+      name: 'codeatlas-chat-storage',
+    }
+  )
+);

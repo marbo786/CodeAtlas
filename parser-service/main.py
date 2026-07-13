@@ -17,23 +17,32 @@ import json
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("parser-service")
 
-# Global cache to store the latest parsed summary
-latest_summary_cache = {
-    "language": "Unknown",
-    "runtime": "Unknown",
-    "framework": "None",
-    "total_modules": 0,
-    "total_functions": 0,
-    "total_classes": 0,
-    "mermaid_modules": "graph LR\n    A[\"CodeAtlas\"] --> B[\"Not Indexed\"]",
-    "mermaid_dependency": "graph TD\n    A[\"Waiting for\"] --> B[\"Ingestion\"]"
-}
 
-API_KEY = os.getenv("PARSER_API_KEY", "dev_api_key_123")
+
+import re
+
+API_KEY = os.getenv("PARSER_API_KEY")
+if not API_KEY:
+    logger.warning("PARSER_API_KEY is not set. API will reject all requests unless CORS bypasses it.")
+
+def validate_github_url(url: str):
+    if not re.match(r"^https://github\.com/[\w.-]+/[\w.-]+(?:\.git)?$", url):
+        raise HTTPException(status_code=400, detail="Invalid GitHub URL")
 ALLOWED_ROOT = os.getenv("PARSER_ALLOWED_REPO_ROOT", "/projects")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 MAX_FILES_PER_REPO = int(os.getenv("PARSER_MAX_FILES", "5000"))
 MAX_FILE_SIZE = int(os.getenv("PARSER_MAX_FILE_SIZE", str(1 * 1024 * 1024))) # 1MB limit
+MAX_REPO_SIZE = int(os.getenv("PARSER_MAX_REPO_SIZE", str(100 * 1024 * 1024))) # 100MB limit
+
+def get_dir_size(path='.'):
+    total = 0
+    with os.scandir(path) as it:
+        for entry in it:
+            if entry.is_file():
+                total += entry.stat().st_size
+            elif entry.is_dir():
+                total += get_dir_size(entry.path)
+    return total
 
 IGNORED_DIRS = {'node_modules', 'dist', 'build', 'venv', 'env', '__pycache__', '.git', '.github'}
 
@@ -322,33 +331,31 @@ def parse_repo(request: ParseRequest, api_key: str = Depends(get_api_key)):
 
 @app.get("/summary")
 def summary_repo_endpoint():
-    # Return the globally cached summary from the last ingested repo
-    return latest_summary_cache
+    raise HTTPException(status_code=410, detail="This endpoint is deprecated. Fetch data via n8n from PostgreSQL.")
 
 @app.get("/architecture")
 def architecture_endpoint():
-    # Return just the mermaid parts from cache
-    return {
-        "mermaid_modules": latest_summary_cache.get("mermaid_modules", ""),
-        "mermaid_dependency": latest_summary_cache.get("mermaid_dependency", "")
-    }
+    raise HTTPException(status_code=410, detail="This endpoint is deprecated. Fetch data via n8n from PostgreSQL.")
 
 @app.post("/ingest")
 def ingest_repo(request: IngestRequest, api_key: str = Depends(get_api_key)):
-    global latest_summary_cache
+    validate_github_url(request.github_url)
     logger.info(f"Starting ingest for: {request.github_url}")
     # Create temp directory
     temp_dir = tempfile.mkdtemp(prefix="codeatlas_ingest_")
     try:
         git.Repo.clone_from(request.github_url, temp_dir, depth=1)
+        
+        if get_dir_size(temp_dir) > MAX_REPO_SIZE:
+            raise HTTPException(status_code=413, detail="Repository exceeds maximum allowed size")
+            
         # Calculate summary and save it to cache BEFORE temp dir is deleted
         summary_stats = _do_summary(temp_dir, request.github_url)
         # Parse it
         parsed_data = _do_parse(temp_dir, request.github_url)
         
-        # Merge graphs into summary cache
+        # Merge graphs into summary 
         graphs = _generate_mermaid_graphs(parsed_data)
-        latest_summary_cache = {**summary_stats, **graphs}
         
         # Include summary and graphs in the response so n8n can save them to Postgres
         return {
@@ -369,11 +376,15 @@ def ingest_repo(request: IngestRequest, api_key: str = Depends(get_api_key)):
 
 @app.post("/security")
 def run_security_scan(request: SecurityRequest, api_key: str = Depends(get_api_key)):
+    validate_github_url(request.github_url)
     logger.info(f"Starting security scan for: {request.github_url}")
     temp_dir = tempfile.mkdtemp(prefix="codeatlas_security_")
     try:
         git.Repo.clone_from(request.github_url, temp_dir, depth=1)
         
+        if get_dir_size(temp_dir) > MAX_REPO_SIZE:
+            raise HTTPException(status_code=413, detail="Repository exceeds maximum allowed size")
+            
         # Run semgrep scan
         # --json outputs JSON, --config auto selects rules automatically based on language
         cmd = ["semgrep", "scan", "--json", "--config", "auto", temp_dir]
