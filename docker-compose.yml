@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   n8n:
-    build:
-      context: .
-      dockerfile: Dockerfile.n8n
+    image: docker.n8n.io/n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
     ports:
