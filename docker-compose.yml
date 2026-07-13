@@ -67,6 +67,18 @@ services:
       # Mount local workspace for development testing
       - .:/projects/codeatlas
 
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - parser-service
+
 volumes:
   n8n_data:
   postgres_data:

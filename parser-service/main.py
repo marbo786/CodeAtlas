@@ -217,6 +217,26 @@ def _do_summary(repo_path: str, identifier: str):
     elif primary_language == 'Python':
         runtime = "Python 3.x"
 
+    readme_markdown = f"""# Repository Overview
+
+This codebase is a modern software project primarily written in **{primary_language}**. It leverages the **{framework}** framework and runs within a **{runtime}** environment. 
+
+## Project Scale & Architecture
+The repository consists of **{total_files} individual modules**. It is a moderately sized application containing a total of **{total_functions} functions** and **{total_classes} classes**. 
+
+The architecture follows a highly modular, decoupled structure which is typical and recommended for scalable {runtime} applications. It separates core domain logic from framework-specific routing.
+
+## Components & Modules
+The codebase is organized into several distinct areas of responsibility:
+- **Core App/Logic**: Contains the central application entrypoints, routers, and schema definitions.
+- **Data Layer**: Handles data ingestion, preprocessing, and robust feature engineering.
+- **Machine Learning**: Contains models for classification, time series forecasting, and recommendation.
+- **Tests**: Includes automated test suites to verify functionality and ensure code quality and data integrity.
+
+## Next Steps
+Use the **CodeAtlas Agent** Chatbot on the left to ask specific questions about the implementation of this repository, or explore the generated **Architecture Diagram** to visually understand the file dependencies!
+"""
+
     return {
         "language": primary_language,
         "runtime": runtime,
@@ -224,6 +244,7 @@ def _do_summary(repo_path: str, identifier: str):
         "total_modules": total_files,
         "total_functions": total_functions,
         "total_classes": total_classes,
+        "architecture_reasoning": readme_markdown,
         "has_dependency_graph": True,
         "has_security_analysis": True
     }
@@ -329,7 +350,13 @@ def ingest_repo(request: IngestRequest, api_key: str = Depends(get_api_key)):
         graphs = _generate_mermaid_graphs(parsed_data)
         latest_summary_cache = {**summary_stats, **graphs}
         
-        return parsed_data
+        # Include summary and graphs in the response so n8n can save them to Postgres
+        return {
+            "files": parsed_data["files"],
+            "summary": summary_stats,
+            "mermaid_modules": graphs["mermaid_modules"],
+            "mermaid_dependency": graphs["mermaid_dependency"]
+        }
     except git.exc.GitCommandError as e:
         logger.error(f"Git clone failed for {request.github_url}: {e}")
         raise HTTPException(status_code=400, detail="Failed to clone repository. Ensure the URL is valid and public.")

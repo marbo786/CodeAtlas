@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// Removed ScrollArea import
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useChatStore, ChatMessage } from '@/store/useChatStore';
 import { mockStreamResponse } from '@/mock/chat';
@@ -41,16 +41,62 @@ export function ChatSection() {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
-  const { messages, status, addMessage, appendStreamChunk, setStatus } = useChatStore();
+  const { messages, status, addMessage, appendStreamChunk, setStatus, sessionId } = useChatStore();
 
   const mutation = useMutation({
     mutationFn: async (query: string) => {
       setStatus('sending');
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setStatus('streaming');
-      await mockStreamResponse(query, (chunk) => {
-        appendStreamChunk(chunk);
+      
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, sessionId }),
       });
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch response');
+      }
+
+      setStatus('streaming');
+
+      // Check if it's a streaming response
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('text/event-stream')) {
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value);
+            // Process SSE data chunks (simplified)
+            const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
+            for (const line of lines) {
+              const data = line.replace('data: ', '').trim();
+              if (data && data !== '[DONE]') {
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.text) appendStreamChunk(parsed.text);
+                } catch (e) {
+                  appendStreamChunk(data);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        // Standard JSON response
+        const data = await res.json();
+        // Assuming n8n returns { output: "..." }
+        const text = data.output || data.response || data.text || JSON.stringify(data);
+        
+        // Simulate streaming for the UI effect
+        const chunkSize = 4;
+        for (let i = 0; i < text.length; i += chunkSize) {
+          appendStreamChunk(text.slice(i, i + chunkSize));
+          await new Promise(r => setTimeout(r, 10)); // 10ms per chunk
+        }
+      }
     },
     onSettled: () => {
       setStatus('idle');
@@ -74,10 +120,7 @@ export function ChatSection() {
 
   useEffect(() => {
     if (scrollRef.current) {
-      const viewport = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, status]);
 
@@ -158,7 +201,7 @@ export function ChatSection() {
               </div>
             </div>
 
-            <ScrollArea className="flex-1 p-4 sm:p-6" ref={scrollRef}>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar" ref={scrollRef}>
               <div className="space-y-6 max-w-4xl mx-auto pb-4">
                 <AnimatePresence initial={false}>
                   {messages.map((msg) => (
@@ -245,7 +288,7 @@ export function ChatSection() {
                   </motion.div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="p-4 bg-card border-t border-border">
               <form onSubmit={handleSend} className="relative max-w-4xl mx-auto flex items-center">

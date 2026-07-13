@@ -13,9 +13,11 @@ interface ChatState {
   appendStreamChunk: (chunk: string) => void;
   setStatus: (status: 'idle' | 'sending' | 'streaming') => void;
   clearMessages: () => void;
+  sessionId: string;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
+  sessionId: `codeatlas-session-${crypto.randomUUID()}`,
   messages: [
     {
       id: 'welcome-msg',

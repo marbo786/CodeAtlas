@@ -1,14 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValueEvent } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import { ReactFlow, Background, Controls } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+import mermaid from 'mermaid';
+import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MOCK_GENERATED_README } from '@/mock/docs';
-import { MOCK_DIAGRAM_NODES, MOCK_DIAGRAM_EDGES } from '@/mock/diagram';
 
 // --- CONFIGURABLE ANIMATION VARIABLES ---
 const EDITOR_START = 0;
@@ -19,8 +18,6 @@ const INITIAL_BLUR = 6;
 const INITIAL_TRANSLATE = 40;
 const INITIAL_SCALE = 0.985;
 // ----------------------------------------
-
-const readmeBlocks = MOCK_GENERATED_README.split('\n\n').filter(Boolean);
 
 // Custom component to handle individual paragraph/block AI generation animation
 function AnimatedMarkdownBlock({ 
@@ -78,9 +75,54 @@ function AnimatedMarkdownBlock({
   );
 }
 
+function Mermaid({ chart }: { chart: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    
+    // We need to wait a tiny bit for the AnimatePresence layout to finish mounting
+    // the container into the DOM before mermaid tries to calculate dimensions.
+    const timer = setTimeout(() => {
+      if (containerRef.current && chart && chart.includes('graph')) {
+        try {
+          mermaid.render('mermaid-svg', chart).then(({ svg }) => {
+            if (containerRef.current) {
+              containerRef.current.innerHTML = svg;
+            }
+          });
+        } catch (e) {
+          console.error("Mermaid parsing failed", e);
+        }
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [chart]);
+
+  return <div ref={containerRef} className="w-full h-full flex items-center justify-center p-8 overflow-auto" />;
+}
+
 export function DocsSection() {
   const [activeTab, setActiveTab] = useState('readme');
   const sectionRef = useRef<HTMLElement>(null);
+  
+  const { data: apiData } = useQuery({
+    queryKey: ['repo', 'latest'],
+    queryFn: async () => {
+      const res = await fetch('/api/repo/latest');
+      if (!res.ok) return null;
+      return res.json();
+    },
+    refetchInterval: 5000
+  });
+
+  const safeReadme = (apiData?.readme === "undefined" || !apiData?.readme) ? null : apiData.readme;
+  const safeDiagram = (apiData?.mermaid_dependency === "undefined" || !apiData?.mermaid_dependency) ? null : apiData.mermaid_dependency;
+
+  const readmeContent = safeReadme ?? "No README generated yet. Run the ingestion workflow!";
+  const readmeBlocks = readmeContent.split('\n\n').filter(Boolean);
+  const diagramContent = safeDiagram ?? 'graph TD\n    A[No Diagram] --> B[Generate in n8n]';
 
   // --- ANIMATION MAPPINGS ---
   const { scrollYProgress } = useScroll({
@@ -110,6 +152,15 @@ export function DocsSection() {
   const [statusOpacity, setStatusOpacity] = useState(0);
 
   useMotionValueEvent(scrollYProgress, "change", (latest) => {
+    // If the data is fully loaded and valid, immediately show completion
+    if (safeReadme && safeReadme !== "undefined") {
+      if (statusMessage !== "Documentation complete ✓") {
+        setStatusMessage("Documentation complete ✓");
+        setStatusOpacity(1);
+      }
+      return;
+    }
+
     if (latest > 0.10 && latest <= 0.3) {
       if (statusMessage !== "Generating README...") {
         setStatusMessage("Generating README...");
@@ -235,7 +286,7 @@ export function DocsSection() {
                     className="max-w-4xl mx-auto"
                   >
                     {/* Phase 3 & 4: AI Writing & Code Blocks */}
-                    {readmeBlocks.map((block, i) => (
+                    {readmeBlocks.map((block: string, i: number) => (
                       <AnimatedMarkdownBlock 
                         key={i} 
                         block={block} 
@@ -251,18 +302,9 @@ export function DocsSection() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.3 }}
-                    className="absolute inset-0 bg-slate-950/50"
+                    className="absolute inset-0 bg-slate-950/50 flex items-center justify-center"
                   >
-                    <ReactFlow 
-                      nodes={MOCK_DIAGRAM_NODES} 
-                      edges={MOCK_DIAGRAM_EDGES} 
-                      fitView
-                      className="bg-background/20"
-                      colorMode="dark"
-                    >
-                      <Background color="#334155" gap={24} />
-                      <Controls className="bg-card border-border fill-foreground" />
-                    </ReactFlow>
+                    <Mermaid chart={diagramContent} />
                   </motion.div>
                 )}
               </AnimatePresence>
