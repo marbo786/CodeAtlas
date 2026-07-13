@@ -104,19 +104,18 @@ export function FooterSection() {
           
           {/* Main Links */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10 mb-12">
-            {['GitHub', 'Documentation', 'License', 'Privacy Policy'].map((item, i) => (
-              <motion.a
-                key={item}
-                href="#"
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: 0.08 * (i + 1), ease: "easeOut" }}
-                className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
-              >
-                {item}
-              </motion.a>
-            ))}
+            <motion.a
+              href="https://github.com/marbo786/CodeAtlas"
+              target="_blank"
+              rel="noopener noreferrer"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, delay: 0.08, ease: "easeOut" }}
+              className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+            >
+              GitHub
+            </motion.a>
           </div>
 
           {/* Copyright */}
