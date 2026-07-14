@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import mermaid from 'mermaid';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRepoStore } from '@/store/useRepoStore';
 
 // --- CONFIGURABLE ANIMATION VARIABLES ---
 const EDITOR_START = 0;
@@ -106,23 +107,26 @@ function Mermaid({ chart }: { chart: string }) {
 export function DocsSection() {
   const [activeTab, setActiveTab] = useState('readme');
   const sectionRef = useRef<HTMLElement>(null);
+  const { currentRepoId } = useRepoStore();
   
   const { data: apiData } = useQuery({
-    queryKey: ['repo', 'latest'],
+    queryKey: ['repo', currentRepoId],
     queryFn: async () => {
-      const res = await fetch('/api/repo/latest');
+      if (!currentRepoId) return null;
+      const res = await fetch(`/api/repo/${currentRepoId}`);
       if (!res.ok) return null;
       return res.json();
     },
+    enabled: !!currentRepoId,
     refetchInterval: 5000
   });
 
   const safeReadme = (apiData?.readme === "undefined" || !apiData?.readme) ? null : apiData.readme;
   const safeDiagram = (apiData?.mermaid_dependency === "undefined" || !apiData?.mermaid_dependency) ? null : apiData.mermaid_dependency;
 
-  const readmeContent = safeReadme ?? "No README generated yet. Run the ingestion workflow!";
+  const readmeContent = safeReadme ?? "No README generated yet. Enter a repository URL above to begin analysis!";
   const readmeBlocks = readmeContent.split('\n\n').filter(Boolean);
-  const diagramContent = safeDiagram ?? 'graph TD\n    A[No Diagram] --> B[Generate in n8n]';
+  const diagramContent = safeDiagram ?? 'graph TD\n    A[No Diagram] --> B[Enter a repository URL above to generate]';
 
   // --- ANIMATION MAPPINGS ---
   const { scrollYProgress } = useScroll({

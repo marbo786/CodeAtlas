@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 export type ChatMessage = {
   id: string;
@@ -14,13 +13,12 @@ interface ChatState {
   appendStreamChunk: (chunk: string) => void;
   setStatus: (status: 'idle' | 'sending' | 'streaming') => void;
   clearMessages: () => void;
+  resetSession: () => void;
   sessionId: string;
 }
 
-export const useChatStore = create<ChatState>()(
-  persist(
-    (set) => ({
-      sessionId: `codeatlas-session-${crypto.randomUUID()}`,
+export const useChatStore = create<ChatState>()((set) => ({
+  sessionId: `codeatlas-session-${crypto.randomUUID()}`,
   messages: [
     {
       id: 'welcome-msg',
@@ -50,10 +48,14 @@ export const useChatStore = create<ChatState>()(
     }
   }),
   setStatus: (status) => set({ status }),
-  clearMessages: () => set({ messages: [] }),
-    }),
-    {
-      name: 'codeatlas-chat-storage',
-    }
-  )
-);
+  clearMessages: () => set({ 
+    messages: [
+      {
+        id: 'welcome-msg',
+        role: 'agent',
+        content: "Hello! I'm CodeAtlas. Ask me anything about the repository's structure, architecture, or codebase."
+      }
+    ]
+  }),
+  resetSession: () => set({ sessionId: `codeatlas-session-${crypto.randomUUID()}` }),
+}));

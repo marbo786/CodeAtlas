@@ -9,6 +9,8 @@ import { buttonVariants } from '@/components/ui/button';
 import { NeonButton } from '@/components/ui/neon-button';
 import { HeroBackground } from './HeroBackground';
 import { Input } from '@/components/ui/input';
+import { useChatStore } from '@/store/useChatStore';
+import { useRepoStore } from '@/store/useRepoStore';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -16,6 +18,8 @@ export function HeroSection() {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [repoUrl, setRepoUrl] = useState('');
+  const { clearMessages, resetSession } = useChatStore();
+  const { setRepoId } = useRepoStore();
 
   const ingestMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -26,6 +30,11 @@ export function HeroSection() {
       });
       if (!res.ok) throw new Error('Failed to start ingestion');
       return res.json();
+    },
+    onSuccess: () => {
+      clearMessages();
+      resetSession();
+      setRepoId('latest');
     }
   });
 
