@@ -64,7 +64,7 @@ export function HeroSection() {
       ingestMutation.mutate(url);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
+        toast.error((error as any).errors[0].message);
       }
     }
   };
@@ -142,7 +142,6 @@ export function HeroSection() {
                 <>Analyze <ArrowRight className="ml-2 h-4 w-4" /></>
               )}
             </NeonButton>
-          </form>
           </form>
         </div>
       </div>
