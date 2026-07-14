@@ -4,7 +4,6 @@ import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValueEvent } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
-import mermaid from 'mermaid';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRepoStore } from '@/store/useRepoStore';
@@ -78,28 +77,40 @@ function AnimatedMarkdownBlock({
 
 function Mermaid({ chart }: { chart: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mermaidId = React.useId().replace(/:/g, '');
 
   useEffect(() => {
-    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    let timer: NodeJS.Timeout;
+    let isMounted = true;
     
-    // We need to wait a tiny bit for the AnimatePresence layout to finish mounting
-    // the container into the DOM before mermaid tries to calculate dimensions.
-    const timer = setTimeout(() => {
-      if (containerRef.current && chart && chart.includes('graph')) {
-        try {
-          mermaid.render('mermaid-svg', chart).then(({ svg }) => {
-            if (containerRef.current) {
-              containerRef.current.innerHTML = svg;
-            }
-          });
-        } catch (e) {
-          console.error("Mermaid parsing failed", e);
-        }
+    const renderChart = async () => {
+      try {
+        const mermaid = (await import('mermaid')).default;
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+        
+        timer = setTimeout(() => {
+          if (containerRef.current && chart && chart.includes('graph') && isMounted) {
+            mermaid.render(`mermaid-${mermaidId}`, chart).then(({ svg }) => {
+              if (containerRef.current && isMounted) {
+                containerRef.current.innerHTML = svg;
+              }
+            }).catch(e => {
+              console.error("Mermaid render failed", e);
+            });
+          }
+        }, 100);
+      } catch (e) {
+        console.error("Failed to load mermaid", e);
       }
-    }, 100);
+    };
     
-    return () => clearTimeout(timer);
-  }, [chart]);
+    renderChart();
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [chart, mermaidId]);
 
   return <div ref={containerRef} className="w-full h-full flex items-center justify-center p-8 overflow-auto" />;
 }
@@ -118,7 +129,10 @@ export function DocsSection() {
       return res.json();
     },
     enabled: !!currentRepoId,
-    refetchInterval: 5000
+    refetchInterval: (query) => {
+      const status = (query.state?.data as any)?.status;
+      return (status === 'ready' || status === 'failed') ? false : 5000;
+    }
   });
 
   const safeReadme = (apiData?.readme === "undefined" || !apiData?.readme) ? null : apiData.readme;

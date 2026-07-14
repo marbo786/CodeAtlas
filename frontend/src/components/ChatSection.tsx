@@ -3,8 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useScroll, useTransform, useMotionValueEvent } from 'motion/react';
 import { useMutation } from '@tanstack/react-query';
-import { Editor } from '@monaco-editor/react';
+import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
+
+const Editor = dynamic(() => import('@monaco-editor/react').then(mod => mod.Editor), { ssr: false });
 import { Send, Bot, User, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,20 +66,40 @@ export function ChatSection() {
         const reader = res.body?.getReader();
         const decoder = new TextDecoder();
         if (reader) {
+          const responseId = crypto.randomUUID();
+          let buffer = '';
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value);
-            // Process SSE data chunks (simplified)
-            const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
+            if (done) {
+              if (buffer.trim().startsWith('data: ')) {
+                const data = buffer.replace('data: ', '').trim();
+                if (data && data !== '[DONE]') {
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.text) appendStreamChunk(parsed.text, responseId);
+                  } catch (e) {
+                    appendStreamChunk(data, responseId);
+                  }
+                }
+              }
+              break;
+            }
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+            
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
             for (const line of lines) {
-              const data = line.replace('data: ', '').trim();
-              if (data && data !== '[DONE]') {
-                try {
-                  const parsed = JSON.parse(data);
-                  if (parsed.text) appendStreamChunk(parsed.text);
-                } catch (e) {
-                  appendStreamChunk(data);
+              if (line.startsWith('data: ')) {
+                const data = line.replace('data: ', '').trim();
+                if (data && data !== '[DONE]') {
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.text) appendStreamChunk(parsed.text, responseId);
+                  } catch (e) {
+                    appendStreamChunk(data, responseId);
+                  }
                 }
               }
             }

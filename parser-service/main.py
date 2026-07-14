@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi import FastAPI, HTTPException, Security, Depends, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
@@ -10,9 +11,10 @@ import git
 import shutil
 from chunker import extract_chunks_and_imports
 from collections import Counter
-from pydantic import BaseModel, HttpUrl
 import subprocess
 import json
+from pathlib import Path
+import httpx
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("parser-service")
@@ -22,7 +24,9 @@ logger = logging.getLogger("parser-service")
 import re
 
 API_KEY = os.getenv("PARSER_API_KEY")
-if not API_KEY:
+if not API_KEY and not os.getenv("PYTEST_CURRENT_TEST"):
+    raise RuntimeError("PARSER_API_KEY is not set. Refusing to start in non-test environment.")
+elif not API_KEY:
     logger.warning("PARSER_API_KEY is not set. API will reject all requests unless CORS bypasses it.")
 
 def validate_github_url(url: str):
@@ -44,7 +48,7 @@ def get_dir_size(path='.'):
                 total += get_dir_size(entry.path)
     return total
 
-IGNORED_DIRS = {'node_modules', 'dist', 'build', 'venv', 'env', '__pycache__', '.git', '.github'}
+IGNORED_DIRS = {'node_modules', 'dist', 'build', 'venv', 'env', '__pycache__', '.git'}
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
@@ -54,26 +58,35 @@ def get_api_key(api_key: str = Security(api_key_header)):
     return api_key
 
 def get_secure_path(repo_path_input: str) -> str:
-    if ".." in repo_path_input:
-        raise HTTPException(status_code=400, detail="Path traversal attempt")
+    try:
+        allowed_base = Path(ALLOWED_ROOT).resolve()
+        input_path = Path(repo_path_input)
         
-    # If the user provides an absolute path in /tmp/, allow it (used by n8n git clone)
-    if os.path.isabs(repo_path_input):
-        resolved_path = os.path.abspath(repo_path_input)
-        if resolved_path.startswith('/tmp/'):
-            if not os.path.exists(resolved_path):
-                raise HTTPException(status_code=404, detail="Repo not found")
-            return resolved_path
+        # Resolve the path and ensure it's relative to allowed_base
+        if input_path.is_absolute():
+            resolved_path = input_path.resolve()
+        else:
+            resolved_path = (allowed_base / input_path).resolve()
             
-    # Otherwise, treat it as a relative path under ALLOWED_ROOT
-    repo_path = os.path.abspath(os.path.join(ALLOWED_ROOT, repo_path_input))
-    if not repo_path.startswith(os.path.abspath(ALLOWED_ROOT)):
+        # Verify it is relative to allowed_base, avoiding traversal/symlink escapes
+        resolved_path.relative_to(allowed_base)
+        
+        if not resolved_path.exists():
+            raise HTTPException(status_code=404, detail="Repo not found")
+            
+        return str(resolved_path)
+    except ValueError:
         raise HTTPException(status_code=400, detail="Path traversal attempt")
-    if not os.path.exists(repo_path):
-        raise HTTPException(status_code=404, detail="Repo not found")
-    return repo_path
 
 app = FastAPI(title="CodeAtlas Parser API")
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    if isinstance(exc.detail, dict) and "ok" in exc.detail:
+        payload = exc.detail
+    else:
+        payload = {"ok": False, "code": exc.status_code, "message": str(exc.detail)}
+    return JSONResponse(status_code=exc.status_code, content=payload)
 
 app.add_middleware(
     CORSMiddleware,
@@ -96,8 +109,8 @@ class SecurityRequest(BaseModel):
 def health_check():
     return {"status": "ok"}
 
-def _do_parse(repo_path: str, identifier: str):
-    logger.info(f"Starting parse for: {identifier}")
+def _do_parse_and_summary(repo_path: str, identifier: str):
+    logger.info(f"Starting combined parse and summary for: {identifier}")
     start_time = time.time()
         
     result_files = []
@@ -105,12 +118,16 @@ def _do_parse(repo_path: str, identifier: str):
     skipped_count = 0
     error_count = 0
     
+    lang_counter = Counter()
+    all_imports = set()
+    total_functions = 0
+    total_classes = 0
+    
     for root, dirs, files in os.walk(repo_path):
-        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith('.')]
+        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not (d.startswith('.') and d != '.github' and d != '.storybook')]
         
         for file in files:
             if file_count >= MAX_FILES_PER_REPO:
-                logger.warning(f"Max files limit reached ({MAX_FILES_PER_REPO}) for {identifier}")
                 break
             ext = os.path.splitext(file)[1]
             lang = None
@@ -125,14 +142,22 @@ def _do_parse(repo_path: str, identifier: str):
                 full_path = os.path.join(root, file)
                 
                 if os.path.getsize(full_path) > MAX_FILE_SIZE:
-                    logger.debug(f"Skipping {full_path} (exceeds MAX_FILE_SIZE)")
                     skipped_count += 1
                     continue
 
                 file_count += 1
+                lang_counter[lang] += 1
                 rel_path = os.path.relpath(full_path, repo_path).replace('\\', '/')
                 try:
                     chunks, imports = extract_chunks_and_imports(full_path, lang)
+                    
+                    all_imports.update(imports)
+                    for chunk in chunks:
+                        if chunk['type'] == 'function':
+                            total_functions += 1
+                        elif chunk['type'] == 'class':
+                            total_classes += 1
+                            
                     result_files.append({
                         "path": rel_path,
                         "language": lang,
@@ -140,123 +165,60 @@ def _do_parse(repo_path: str, identifier: str):
                         "imports": imports
                     })
                 except Exception as e:
-                    logger.error(f"Error parsing {full_path}: {e}")
                     error_count += 1
                     
         if file_count >= MAX_FILES_PER_REPO:
+            logger.warning(f"Max files limit reached ({MAX_FILES_PER_REPO}) for {identifier}")
             break
             
     duration = time.time() - start_time
     logger.info(f"Completed parse for {identifier} in {duration:.2f}s. Parsed: {file_count}, Skipped: {skipped_count}, Errors: {error_count}")
-    return {"files": result_files}
-
-def _do_summary(repo_path: str, identifier: str):
-        
-    total_files = 0
-    lang_counter = Counter()
-    all_imports = set()
-    total_functions = 0
-    total_classes = 0
     
-    logger.info(f"Starting summary for: {identifier}")
-    
-    for root, dirs, files in os.walk(repo_path):
-        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith('.')]
-        
-        for file in files:
-            if total_files >= MAX_FILES_PER_REPO:
-                break
-            ext = os.path.splitext(file)[1]
-            lang = None
-            if ext == '.py':
-                lang = 'python'
-            elif ext in ['.js', '.jsx']:
-                lang = 'javascript'
-            elif ext in ['.ts', '.tsx']:
-                lang = 'typescript'
-                
-            if lang:
-                total_files += 1
-                lang_counter[lang] += 1
-                full_path = os.path.join(root, file)
-                try:
-                    chunks, imports = extract_chunks_and_imports(full_path, lang)
-                    all_imports.update(imports)
-                    
-                    for chunk in chunks:
-                        if chunk['type'] == 'function':
-                            total_functions += 1
-                        elif chunk['type'] == 'class':
-                            total_classes += 1
-                except Exception as e:
-                    print(f"Error parsing {full_path}: {e}")
-                    
     # Determine primary language
     primary_language = lang_counter.most_common(1)[0][0] if lang_counter else "Unknown"
-    
-    # Capitalize it
-    if primary_language == 'javascript':
-        primary_language = 'JavaScript'
-    elif primary_language == 'typescript':
-        primary_language = 'TypeScript'
-    elif primary_language == 'python':
-        primary_language = 'Python'
+    if primary_language == 'javascript': primary_language = 'JavaScript'
+    elif primary_language == 'typescript': primary_language = 'TypeScript'
+    elif primary_language == 'python': primary_language = 'Python'
         
     # Detect framework from imports
     framework = "None detected"
     imports_lower = {i.lower() for i in all_imports}
     
-    if "express" in imports_lower:
-        framework = "Express.js"
-    elif "react" in imports_lower:
-        framework = "React"
-    elif "fastapi" in imports_lower:
-        framework = "FastAPI"
-    elif "flask" in imports_lower:
-        framework = "Flask"
-    elif "vue" in imports_lower:
-        framework = "Vue.js"
-    elif "next" in imports_lower:
-        framework = "Next.js"
+    if "express" in imports_lower: framework = "Express.js"
+    elif "react" in imports_lower: framework = "React"
+    elif "fastapi" in imports_lower: framework = "FastAPI"
+    elif "flask" in imports_lower: framework = "Flask"
+    elif "vue" in imports_lower: framework = "Vue.js"
+    elif "next" in imports_lower: framework = "Next.js"
         
-    # Runtime detection
     runtime = "Unknown"
-    if primary_language in ['JavaScript', 'TypeScript']:
-        runtime = "Node.js"
-    elif primary_language == 'Python':
-        runtime = "Python 3.x"
+    if primary_language in ['JavaScript', 'TypeScript']: runtime = "Node.js"
+    elif primary_language == 'Python': runtime = "Python 3.x"
 
     readme_markdown = f"""# Repository Overview
 
-This codebase is a modern software project primarily written in **{primary_language}**. It leverages the **{framework}** framework and runs within a **{runtime}** environment. 
+This codebase is a software project primarily written in **{primary_language}**. It leverages the **{framework}** framework and runs within a **{runtime}** environment. 
 
 ## Project Scale & Architecture
-The repository consists of **{total_files} individual modules**. It is a moderately sized application containing a total of **{total_functions} functions** and **{total_classes} classes**. 
-
-The architecture follows a highly modular, decoupled structure which is typical and recommended for scalable {runtime} applications. It separates core domain logic from framework-specific routing.
-
-## Components & Modules
-The codebase is organized into several distinct areas of responsibility:
-- **Core App/Logic**: Contains the central application entrypoints, routers, and schema definitions.
-- **Data Layer**: Handles data ingestion, preprocessing, and robust feature engineering.
-- **Machine Learning**: Contains models for classification, time series forecasting, and recommendation.
-- **Tests**: Includes automated test suites to verify functionality and ensure code quality and data integrity.
+The repository consists of **{file_count} individual modules**, containing a total of **{total_functions} functions** and **{total_classes} classes**. 
 
 ## Next Steps
 Use the **CodeAtlas Agent** Chatbot on the left to ask specific questions about the implementation of this repository, or explore the generated **Architecture Diagram** to visually understand the file dependencies!
 """
 
-    return {
+    summary_stats = {
         "language": primary_language,
         "runtime": runtime,
         "framework": framework,
-        "total_modules": total_files,
+        "total_modules": file_count,
         "total_functions": total_functions,
         "total_classes": total_classes,
         "architecture_reasoning": readme_markdown,
         "has_dependency_graph": True,
         "has_security_analysis": True
     }
+    
+    return {"files": result_files}, summary_stats
 
 def _generate_mermaid_graphs(parsed_data):
     # 1. File Dependency Graph (mermaid_modules)
@@ -327,7 +289,8 @@ def _generate_mermaid_graphs(parsed_data):
 @app.post("/parse")
 def parse_repo(request: ParseRequest, api_key: str = Depends(get_api_key)):
     repo_path = get_secure_path(request.repo_path)
-    return _do_parse(repo_path, request.repo_path)
+    parsed_data, _ = _do_parse_and_summary(repo_path, request.repo_path)
+    return parsed_data
 
 @app.get("/summary")
 def summary_repo_endpoint():
@@ -337,27 +300,39 @@ def summary_repo_endpoint():
 def architecture_endpoint():
     raise HTTPException(status_code=410, detail="This endpoint is deprecated. Fetch data via n8n from PostgreSQL.")
 
+def _preflight_repo_size_check(github_url: str):
+    match = re.match(r"^https://github\.com/([\w.-]+)/([\w.-]+)(?:\.git)?$", github_url)
+    if match:
+        owner, repo = match.groups()
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                res = client.get(f"https://api.github.com/repos/{owner}/{repo}")
+                if res.status_code == 200:
+                    size_kb = res.json().get("size", 0)
+                    if size_kb * 1024 > MAX_REPO_SIZE:
+                        raise HTTPException(status_code=413, detail="Repository exceeds maximum allowed size")
+        except httpx.RequestError:
+            pass
+
 @app.post("/ingest")
 def ingest_repo(request: IngestRequest, api_key: str = Depends(get_api_key)):
     validate_github_url(request.github_url)
+    _preflight_repo_size_check(request.github_url)
+    
     logger.info(f"Starting ingest for: {request.github_url}")
-    # Create temp directory
     temp_dir = tempfile.mkdtemp(prefix="codeatlas_ingest_")
     try:
-        git.Repo.clone_from(request.github_url, temp_dir, depth=1)
+        git.Repo.clone_from(request.github_url, temp_dir, depth=1, env={"GIT_TERMINAL_PROMPT": "0"})
         
         if get_dir_size(temp_dir) > MAX_REPO_SIZE:
             raise HTTPException(status_code=413, detail="Repository exceeds maximum allowed size")
             
-        # Calculate summary and save it to cache BEFORE temp dir is deleted
-        summary_stats = _do_summary(temp_dir, request.github_url)
-        # Parse it
-        parsed_data = _do_parse(temp_dir, request.github_url)
+        parsed_data, summary_stats = _do_parse_and_summary(temp_dir, request.github_url)
         
-        # Merge graphs into summary 
         graphs = _generate_mermaid_graphs(parsed_data)
         
-        # Include summary and graphs in the response so n8n can save them to Postgres
         return {
             "files": parsed_data["files"],
             "summary": summary_stats,
@@ -385,14 +360,14 @@ def run_security_scan(request: SecurityRequest, api_key: str = Depends(get_api_k
         if get_dir_size(temp_dir) > MAX_REPO_SIZE:
             raise HTTPException(status_code=413, detail="Repository exceeds maximum allowed size")
             
-        # Run semgrep scan
-        # --json outputs JSON, --config auto selects rules automatically based on language
+        # Run semgrep scan with timeout
         cmd = ["semgrep", "scan", "--json", "--config", "auto", temp_dir]
+        try:
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+        except subprocess.TimeoutExpired:
+            logger.error(f"Semgrep timed out for {request.github_url}")
+            raise HTTPException(status_code=504, detail="Security scan timed out.")
         
-        process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        
-        # Semgrep returns 0 if no findings, 1 if findings are found. Both are valid.
-        # It returns >1 for errors.
         if process.returncode > 1:
             logger.error(f"Semgrep failed: {process.stderr}")
             raise HTTPException(status_code=500, detail="Security scan failed during execution.")

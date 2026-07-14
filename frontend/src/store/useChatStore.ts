@@ -10,7 +10,7 @@ interface ChatState {
   messages: ChatMessage[];
   status: 'idle' | 'sending' | 'streaming';
   addMessage: (msg: ChatMessage) => void;
-  appendStreamChunk: (chunk: string) => void;
+  appendStreamChunk: (chunk: string, messageId?: string) => void;
   setStatus: (status: 'idle' | 'sending' | 'streaming') => void;
   clearMessages: () => void;
   resetSession: () => void;
@@ -28,23 +28,41 @@ export const useChatStore = create<ChatState>()((set) => ({
   ],
   status: 'idle',
   addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
-  appendStreamChunk: (chunk) => set((state) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage && lastMessage.role === 'agent') {
-      const updatedMessages = [...state.messages];
-      updatedMessages[updatedMessages.length - 1] = {
-        ...lastMessage,
-        content: lastMessage.content + chunk
-      };
-      return { messages: updatedMessages };
+  appendStreamChunk: (chunk, messageId) => set((state) => {
+    if (messageId) {
+      const existingMessageIndex = state.messages.findIndex(m => m.id === messageId);
+      if (existingMessageIndex !== -1) {
+        const updatedMessages = [...state.messages];
+        updatedMessages[existingMessageIndex] = {
+          ...updatedMessages[existingMessageIndex],
+          content: updatedMessages[existingMessageIndex].content + chunk
+        };
+        return { messages: updatedMessages };
+      } else {
+        return {
+          messages: [
+            ...state.messages,
+            { id: messageId, role: 'agent', content: chunk }
+          ]
+        };
+      }
     } else {
-      // Create a new agent message if last was user
-      return {
-        messages: [
-          ...state.messages,
-          { id: crypto.randomUUID(), role: 'agent', content: chunk }
-        ]
-      };
+      const lastMessage = state.messages[state.messages.length - 1];
+      if (lastMessage && lastMessage.role === 'agent') {
+        const updatedMessages = [...state.messages];
+        updatedMessages[updatedMessages.length - 1] = {
+          ...lastMessage,
+          content: lastMessage.content + chunk
+        };
+        return { messages: updatedMessages };
+      } else {
+        return {
+          messages: [
+            ...state.messages,
+            { id: crypto.randomUUID(), role: 'agent', content: chunk }
+          ]
+        };
+      }
     }
   }),
   setStatus: (status) => set({ status }),

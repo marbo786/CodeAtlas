@@ -9,8 +9,14 @@ import { buttonVariants } from '@/components/ui/button';
 import { NeonButton } from '@/components/ui/neon-button';
 import { HeroBackground } from './HeroBackground';
 import { Input } from '@/components/ui/input';
+import { z } from 'zod';
+import { toast } from 'sonner';
 import { useChatStore } from '@/store/useChatStore';
 import { useRepoStore } from '@/store/useRepoStore';
+
+const githubUrlSchema = z.string().url().regex(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?$/, {
+  message: "Must be a valid public GitHub repository URL"
+});
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -28,20 +34,38 @@ export function HeroSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ github_url: url })
       });
-      if (!res.ok) throw new Error('Failed to start ingestion');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        throw new Error(errorData?.message || errorData?.detail || errorData?.error || 'Failed to start ingestion');
+      }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       clearMessages();
       resetSession();
-      setRepoId('latest');
+      // Use explicit ID if provided, otherwise "latest"
+      const returnedId = data?.id || data?.repo_id || 'latest';
+      setRepoId(returnedId);
+      toast.success("Repository analysis complete!");
+      scrollToNext();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to analyze repository.");
     }
   });
 
   const handleIngest = (e: React.FormEvent) => {
     e.preventDefault();
-    if (repoUrl.trim()) {
-      ingestMutation.mutate(repoUrl.trim());
+    const url = repoUrl.trim();
+    if (!url) return;
+    
+    try {
+      githubUrlSchema.parse(url);
+      ingestMutation.mutate(url);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        toast.error(error.errors[0].message);
+      }
     }
   };
 
@@ -119,12 +143,7 @@ export function HeroSection() {
               )}
             </NeonButton>
           </form>
-          {ingestMutation.isError && (
-             <p className="text-red-400 text-sm mt-3 font-medium">Failed to analyze repository. Check your orchestrator.</p>
-          )}
-          {ingestMutation.isSuccess && (
-             <p className="text-green-400 text-sm mt-3 font-medium">Repository analysis complete! Scroll down to explore.</p>
-          )}
+          </form>
         </div>
       </div>
 

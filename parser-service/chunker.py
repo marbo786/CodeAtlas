@@ -1,12 +1,26 @@
 import tree_sitter_python as tspython
 import tree_sitter_javascript as tsjavascript
 import tree_sitter_typescript as tstypescript
+try:
+    import tree_sitter_java as tsjava
+    import tree_sitter_go as tsgo
+    import tree_sitter_rust as tsrust
+    HAS_EXTRA_LANGS = True
+except ImportError:
+    HAS_EXTRA_LANGS = False
+
 from tree_sitter import Language, Parser
 import os
+import re
 
 PY_LANGUAGE = Language(tspython.language(), 'python')
 JS_LANGUAGE = Language(tsjavascript.language(), 'javascript')
 TS_LANGUAGE = Language(tstypescript.language_typescript(), 'typescript')
+
+if HAS_EXTRA_LANGS:
+    JAVA_LANGUAGE = Language(tsjava.language(), 'java')
+    GO_LANGUAGE = Language(tsgo.language(), 'go')
+    RUST_LANGUAGE = Language(tsrust.language(), 'rust')
 
 def get_parser(language_str: str) -> Parser:
     parser = Parser()
@@ -16,6 +30,12 @@ def get_parser(language_str: str) -> Parser:
         parser.set_language(JS_LANGUAGE)
     elif language_str == 'typescript':
         parser.set_language(TS_LANGUAGE)
+    elif HAS_EXTRA_LANGS and language_str == 'java':
+        parser.set_language(JAVA_LANGUAGE)
+    elif HAS_EXTRA_LANGS and language_str == 'go':
+        parser.set_language(GO_LANGUAGE)
+    elif HAS_EXTRA_LANGS and language_str == 'rust':
+        parser.set_language(RUST_LANGUAGE)
     else:
         raise ValueError(f"Unsupported language: {language_str}")
     return parser
@@ -40,11 +60,15 @@ def extract_chunks_and_imports(file_path: str, language_str: str):
         
         node_type = node.type
         
-        if node_type in ['import_statement', 'import_from_statement']:
-            # Extract basic import text, could be more granular but this works for basic dependencies
-            # We'll just extract the module names if possible, or just the raw text
+        if node_type in ['import_statement', 'import_from_statement', 'import_declaration', 'call_expression']:
             text = node.text.decode('utf8')
-            imports.append(text)
+            
+            # CommonJS / Dynamic imports
+            if node_type == 'call_expression':
+                if 'require(' in text or 'import(' in text:
+                    imports.append(text)
+            else:
+                imports.append(text)
             
         elif node_type in ['function_definition', 'function_declaration', 'arrow_function', 'method_definition']:
             # Find name
@@ -95,12 +119,30 @@ def extract_chunks_and_imports(file_path: str, language_str: str):
                 parts = imp.split(' ')
                 if len(parts) > 1:
                     clean_imports.append(parts[1])
-        else: # JS/TS
-            if 'from' in imp:
+        else: # JS/TS/Java/Go/Rust
+            if 'from' in imp and ('javascript' in language_str or 'typescript' in language_str):
                 parts = imp.split('from')
                 if len(parts) > 1:
                     clean_module = parts[1].strip().strip('\'";')
                     clean_imports.append(clean_module)
+            elif 'require(' in imp:
+                match = re.search(r"require\(['\"](.*?)['\"]\)", imp)
+                if match:
+                    clean_imports.append(match.group(1))
+            elif 'import(' in imp:
+                match = re.search(r"import\(['\"](.*?)['\"]\)", imp)
+                if match:
+                    clean_imports.append(match.group(1))
+            elif language_str == 'go' and 'import' in imp:
+                match = re.search(r'"(.*?)"', imp)
+                if match:
+                    clean_imports.append(match.group(1))
+            elif language_str == 'java' and 'import ' in imp:
+                clean_module = imp.replace('import ', '').replace(';', '').strip()
+                clean_imports.append(clean_module)
+            elif language_str == 'rust' and 'use ' in imp:
+                clean_module = imp.replace('use ', '').replace(';', '').strip()
+                clean_imports.append(clean_module.split('::')[0])
                     
     # Deduplicate
     clean_imports = list(set(clean_imports))

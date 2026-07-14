@@ -164,16 +164,52 @@ CodeAtlas/
 
 ---
 
-## Running it locally
+## Running it locally (Local Quickstart)
 
-```bash
-git clone https://github.com/marbo786/CodeAtlas.git
-cd CodeAtlas
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/marbo786/CodeAtlas.git
+   cd CodeAtlas
+   ```
 
-docker compose up -d
-```
+2. **Configure Environment**
+   Copy `.env.example` to `.env` and fill in your keys:
+   ```bash
+   cp .env.example .env
+   ```
+   *Note: Ensure `PARSER_API_KEY` is set securely. The `N8N_BASE_URL` should point to your orchestrator.*
 
-This spins up n8n, Qdrant, Postgres, and the parser service together. Import the workflow JSONs into n8n, wire up your Gemini/Qdrant/Postgres credentials, then hit the ingestion webhook with a repo URL to get started.
+3. **Start the Infrastructure**
+   Spin up n8n, Qdrant, Postgres, and the parser service:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Setup Orchestrator (n8n)**
+   - Open n8n at `http://localhost:5678`
+   - Import `workflows.json` into n8n.
+   - Configure credentials for:
+     - PostgreSQL (`codeatlas_db`, `codeatlas_admin`, etc.)
+     - Qdrant (URL: `http://qdrant:6333`)
+     - Google Gemini API Key
+   - Ensure the webhook URLs match your `.env`:
+     - Ingest webhook: `/webhook/ingest`
+     - Read API webhook: `/webhook/read-api`
+     - Chat webhook: `/webhook/.../chat`
+
+5. **Start the Frontend**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+6. **Verify System**
+   - Open `http://localhost:3000`
+   - Paste a public GitHub URL (e.g., `https://github.com/expressjs/express`) into the Hero input.
+   - You should see n8n workflows trigger, and Postgres populate with `repos` and `files` records.
+   - Check Qdrant collections to verify vector embeddings were stored.
+   - If ingestion fails, check Docker logs: `docker compose logs parser-service` or n8n execution history.
 
 ---
 

@@ -1,4 +1,7 @@
 import pytest
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from chunker import get_parser, extract_chunks_and_imports
 
 def test_get_parser_valid_languages():
