@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     // Fetch the latest repo ID to provide context to the AI
     let repoContext = "";
     try {
-      const repoRes = await fetch(new URL('/api/repo/latest', request.url).toString());
+      const repoRes = await fetch(new URL('/api/repo/latest', request.url).toString(), { cache: 'no-store' });
       if (repoRes.ok) {
         const repoData = await repoRes.json();
         if (repoData && repoData.id) {
