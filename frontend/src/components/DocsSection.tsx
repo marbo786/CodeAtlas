@@ -45,6 +45,7 @@ function AnimatedMarkdownBlock({
   // Code Block specific animations
   const codeX = useTransform(scrollYProgress, [start, end], [-12, 0]);
   const shimmerProgress = useTransform(scrollYProgress, [start, end + 0.05], [-100, 200]);
+  const shimmerLeft = useTransform(shimmerProgress, v => `${v}%`);
   
   // Caret visibility (only visible while this specific block is generating)
   const caretOpacity = useTransform(scrollYProgress, [start - 0.01, start, end, end + 0.01], [0, 1, 1, 0]);
@@ -60,7 +61,7 @@ function AnimatedMarkdownBlock({
       
       {isCode && (
         <motion.div
-           style={{ left: useTransform(shimmerProgress, v => `${v}%`) }}
+           style={{ left: shimmerLeft }}
            className="absolute top-0 bottom-0 w-32 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-[-20deg] pointer-events-none z-10"
         />
       )}

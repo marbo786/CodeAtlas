@@ -110,7 +110,7 @@ def _do_parse(repo_path: str, identifier: str):
         
         for file in files:
             if file_count >= MAX_FILES_PER_REPO:
-                logger.warning(f"Max files limit reached ({MAX_FILES_PER_REPO}) for {request.repo_id}")
+                logger.warning(f"Max files limit reached ({MAX_FILES_PER_REPO}) for {identifier}")
                 break
             ext = os.path.splitext(file)[1]
             lang = None

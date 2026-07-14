@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const N8N_BASE_URL = process.env.N8N_BASE_URL || 'http://localhost:5678';
-const N8N_CHAT_PATH = process.env.N8N_CHAT_PATH || '/webhook/chat';
+const N8N_CHAT_PATH = process.env.N8N_CHAT_PATH && process.env.N8N_CHAT_PATH !== '/webhook/chat' 
+  ? process.env.N8N_CHAT_PATH 
+  : '/webhook/63556229-4761-45c0-bdab-619a1b99f2de/chat';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,13 +11,24 @@ export async function POST(request: NextRequest) {
 
     const n8nUrl = new URL(N8N_CHAT_PATH, N8N_BASE_URL);
 
-    // The frontend sends { query: "...", sessionId: "..." }
-    // We use the client's sessionId to maintain conversational memory for the duration
-    // of their page visit. If they refresh, they get a new ID and fresh memory.
+    // Fetch the latest repo ID to provide context to the AI
+    let repoContext = "";
+    try {
+      const repoRes = await fetch(new URL('/api/repo/latest', request.url).toString());
+      if (repoRes.ok) {
+        const repoData = await repoRes.json();
+        if (repoData && repoData.id) {
+          repoContext = `[Context: The user is currently viewing the repository with ID: ${repoData.id}. If you need to search the database or vector store, prioritize this repository.]\n\n`;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch repo context for chat", e);
+    }
+
     const payload = {
       action: "sendMessage",
       sessionId: body.sessionId || `codeatlas-session-${Date.now()}`, 
-      chatInput: body.query
+      chatInput: repoContext + body.query
     };
 
     // Forward the request to n8n
