@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   n8n:
-    image: docker.n8n.io/n8nio/n8n:latest
+    build:
+      context: ./infra
+      dockerfile: Dockerfile.n8n
     container_name: n8n
     restart: unless-stopped
     ports:
@@ -12,28 +14,27 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - NODE_ENV=production
-      - WEBHOOK_URL=http://localhost:5678/
+      - WEBHOOK_URL=${N8N_PUBLIC_URL:-http://localhost:5678/}
       - N8N_SECURE_COOKIE=false
       - GENERIC_TIMEZONE=UTC
       - NODES_EXCLUDE=[]
-      # Expose docker socket or give it access to run commands (like git, semgrep) 
-      # Since we need to run git clone and semgrep locally on n8n node, 
-      # we need an n8n image that has these tools, or we execute them in a custom image.
-      # Wait, standard n8n image doesn't have semgrep. It might have git.
-      # For now, we will use the standard n8n image, we can install semgrep via Execute Command or build a custom Dockerfile later if needed.
     volumes:
       - n8n_data:/root/.n8n
-      # Mount /tmp so n8n can write to /tmp for git clone
       - shared_tmp:/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   postgres:
     image: postgres:15
     container_name: postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-codeatlas}
+      - POSTGRES_USER=${POSTGRES_USER:-codeatlas_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-super_secret_dev_password}
+      - POSTGRES_DB=${POSTGRES_DB:-codeatlas_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
@@ -54,13 +55,18 @@ services:
     restart: unless-stopped
     environment:
       - PARSER_API_KEY=${PARSER_API_KEY}
-      - PARSER_ALLOWED_REPO_ROOT=${PARSER_ALLOWED_REPO_ROOT:-/projects}
+      - PARSER_ALLOWED_REPO_ROOT=${PARSER_ALLOWED_REPO_ROOT:-/tmp}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
     ports:
       - "8000:8000"
     volumes:
       # Mount /tmp to share cloned repos with n8n
       - shared_tmp:/tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   frontend:
     build:
@@ -70,9 +76,14 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
       - N8N_BASE_URL=http://n8n:5678
-      - N8N_CHAT_PATH=/webhook/chat
+      - N8N_INGEST_PATH=${N8N_INGEST_PATH:-/webhook/ingest}
+      - N8N_CHAT_PATH=${N8N_CHAT_PATH:-/webhook/63556229-4761-45c0-bdab-619a1b99f2de/chat}
+      - N8N_READ_API_PATH=${N8N_READ_API_PATH:-/webhook/read-api}
     depends_on:
-      - parser-service
+      parser-service:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
 
   caddy:
     image: caddy:latest
