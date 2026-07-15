@@ -120,12 +120,12 @@ export function DocsSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const { currentRepoId } = useRepoStore();
   
-  const { data: apiData } = useQuery({
+  const { data: apiData, isError, isFetching } = useQuery({
     queryKey: ['repo', currentRepoId],
     queryFn: async () => {
       if (!currentRepoId) return null;
       const res = await fetch(`/api/repo/${currentRepoId}`);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error('Failed to load repository documentation');
       return res.json();
     },
     enabled: !!currentRepoId,
@@ -138,7 +138,9 @@ export function DocsSection() {
   const safeReadme = (apiData?.readme === "undefined" || !apiData?.readme) ? null : apiData.readme;
   const safeDiagram = (apiData?.mermaid_dependency === "undefined" || !apiData?.mermaid_dependency) ? null : apiData.mermaid_dependency;
 
-  const readmeContent = safeReadme ?? "No README generated yet. Enter a repository URL above to begin analysis!";
+  const readmeContent = isError
+    ? "Unable to load repository documentation. Check the n8n Read API workflow and try again."
+    : safeReadme ?? (isFetching ? "Loading generated documentation..." : "No README generated yet. Enter a repository URL above to begin analysis!");
   const readmeBlocks = readmeContent.split('\n\n').filter(Boolean);
   const diagramContent = safeDiagram ?? 'graph TD\n    A[No Diagram] --> B[Enter a repository URL above to generate]';
 
@@ -210,7 +212,7 @@ export function DocsSection() {
   });
 
   return (
-    <section ref={sectionRef} className="w-full py-24 px-4 md:px-8 bg-muted/30">
+    <section id="docs" ref={sectionRef} className="w-full py-24 px-4 md:px-8 bg-muted/30">
       <div className="max-w-6xl mx-auto flex flex-col items-center">
         
         {/* Header (Fades in normally) */}
@@ -234,10 +236,10 @@ export function DocsSection() {
             style={{ opacity: statusOpacity }}
           >
             <span className="text-sm font-mono text-muted-foreground bg-card px-3 py-1 rounded-full border border-border flex items-center">
-              {statusMessage !== "Documentation complete ✓" && (
+              {(statusMessage !== "Documentation complete ✓" || isError) && (
                 <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse mr-2" />
               )}
-              {statusMessage}
+              {isError ? "Documentation load failed" : statusMessage}
             </span>
           </div>
         </motion.div>
