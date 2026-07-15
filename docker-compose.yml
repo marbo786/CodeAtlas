@@ -18,8 +18,12 @@ services:
       - N8N_SECURE_COOKIE=false
       - GENERIC_TIMEZONE=UTC
       - NODES_EXCLUDE=[]
+      - N8N_DB_SQLITE_ENABLE_WAL=true
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_PROGRESS=false
     volumes:
-      - n8n_data:/root/.n8n
+      - n8n_data:/home/node/.n8n
       - shared_tmp:/tmp
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
