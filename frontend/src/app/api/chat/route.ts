@@ -24,11 +24,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const baseSessionId = body.sessionId || `codeatlas-session-${Date.now()}`;
     const payload = {
       action: "sendMessage",
-      sessionId: body.sessionId || `codeatlas-session-${Date.now()}`, 
+      sessionId: body.repoId ? `${body.repoId}|||${baseSessionId}` : baseSessionId, 
       chatInput: repoContext + body.query,
-      repoId: body.repoId // Added this so n8n can use it in a Qdrant Metadata Filter
     };
 
     // Forward the request to n8n
