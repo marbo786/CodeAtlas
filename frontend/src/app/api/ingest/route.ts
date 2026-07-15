@@ -19,8 +19,16 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       console.error(`n8n responded with status: ${response.status}`);
+      const errorText = await response.text();
+      let errorMessage = 'Failed to trigger ingestion workflow.';
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorData.detail || errorData.error || errorText;
+      } catch (e) {
+        if (errorText) errorMessage = errorText;
+      }
       return NextResponse.json(
-        { error: 'Failed to trigger ingestion workflow.' },
+        { error: errorMessage },
         { status: response.status }
       );
     }
