@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   n8n:
-    build:
-      context: ./infra
-      dockerfile: Dockerfile.n8n
+    image: docker.n8n.io/n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
     ports:
@@ -18,10 +16,11 @@ services:
       - N8N_SECURE_COOKIE=false
       - GENERIC_TIMEZONE=UTC
       - NODES_EXCLUDE=[]
-      - N8N_DB_SQLITE_ENABLE_WAL=true
       - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
       - EXECUTIONS_DATA_SAVE_ON_ERROR=all
       - EXECUTIONS_DATA_SAVE_ON_PROGRESS=false
+      - N8N_RUNNERS_GRANT_TOKEN_TTL=300
+      - N8N_DIAGNOSTICS_ENABLED=false
     volumes:
       - n8n_data:/home/node/.n8n
       - shared_tmp:/tmp
@@ -30,6 +29,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    depends_on:
+      postgres:
+        condition: service_started
 
   postgres:
     image: postgres:15
@@ -64,7 +66,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount /tmp to share cloned repos with n8n
       - shared_tmp:/tmp
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
