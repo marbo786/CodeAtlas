@@ -72,7 +72,7 @@ Feed it a repo URL, and it will:
                                      ▼
                   ┌────────────────────────────────────┐
                   │              frontend              │
-                  │ Next.js 15, React 19, TailwindCSS  │
+                  │ Next.js 16, React 19, TailwindCSS  │
                   │         dark / teal theme          │
                   └────────────────────────────────────┘
 ```
@@ -145,7 +145,7 @@ A thin, read-only REST layer over Postgres for the frontend — repo info, file 
 | Vector store | Qdrant |
 | Relational store | PostgreSQL |
 | Embeddings + LLM | Google Gemini |
-| Frontend | Next.js 15, React 19, TailwindCSS, Framer Motion |
+| Frontend | Next.js 16, React 19, TailwindCSS, Motion |
 | Infra | Docker Compose |
 
 ---
@@ -154,10 +154,10 @@ A thin, read-only REST layer over Postgres for the frontend — repo info, file 
 
 ```
 CodeAtlas/
-├── frontend/             # Next.js 15 UI, dark/teal design system
+├── frontend/             # Next.js 16 UI, dark/teal design system
 ├── parser-service/       # FastAPI microservice — clones & parses repos
 ├── sql/                  # Postgres schema / init scripts
-├── Dockerfile.n8n        # custom n8n image
+├── infra/Dockerfile.n8n  # custom n8n image with shell tooling
 ├── docker-compose.yml    # n8n + Qdrant + Postgres + parser-service
 └── README.md
 ```
@@ -177,7 +177,7 @@ CodeAtlas/
    ```bash
    cp .env.example .env
    ```
-   *Note: Ensure `PARSER_API_KEY` is set securely. The `N8N_BASE_URL` should point to your orchestrator.*
+   *Note: Ensure `PARSER_API_KEY` is set securely. The `N8N_BASE_URL` should point to your orchestrator and `N8N_PUBLIC_URL` should be the browser-reachable webhook base URL.*
 
 3. **Start the Infrastructure**
    Spin up n8n, Qdrant, Postgres, and the parser service:

@@ -18,9 +18,19 @@ JS_LANGUAGE = Language(tsjavascript.language(), 'javascript')
 TS_LANGUAGE = Language(tstypescript.language_typescript(), 'typescript')
 
 if HAS_EXTRA_LANGS:
-    JAVA_LANGUAGE = Language(tsjava.language(), 'java')
-    GO_LANGUAGE = Language(tsgo.language(), 'go')
-    RUST_LANGUAGE = Language(tsrust.language(), 'rust')
+    try:
+        JAVA_LANGUAGE = Language(tsjava.language(), 'java')
+        GO_LANGUAGE = Language(tsgo.language(), 'go')
+        RUST_LANGUAGE = Language(tsrust.language(), 'rust')
+    except (TypeError, ValueError):
+        HAS_EXTRA_LANGS = False
+
+SUPPORTED_LANGUAGES = {'python', 'javascript', 'typescript'}
+if HAS_EXTRA_LANGS:
+    SUPPORTED_LANGUAGES.update({'java', 'go', 'rust'})
+
+def is_language_supported(language_str: str) -> bool:
+    return language_str in SUPPORTED_LANGUAGES
 
 def get_parser(language_str: str) -> Parser:
     parser = Parser()
@@ -60,7 +70,7 @@ def extract_chunks_and_imports(file_path: str, language_str: str):
         
         node_type = node.type
         
-        if node_type in ['import_statement', 'import_from_statement', 'import_declaration', 'call_expression']:
+        if node_type in ['import_statement', 'import_from_statement', 'import_declaration', 'import_spec', 'use_declaration', 'call_expression']:
             text = node.text.decode('utf8')
             
             # CommonJS / Dynamic imports
@@ -70,7 +80,7 @@ def extract_chunks_and_imports(file_path: str, language_str: str):
             else:
                 imports.append(text)
             
-        elif node_type in ['function_definition', 'function_declaration', 'arrow_function', 'method_definition']:
+        elif node_type in ['function_definition', 'function_declaration', 'arrow_function', 'method_definition', 'method_declaration', 'function_item']:
             # Find name
             name = "unknown_function"
             for child in node.children:
@@ -86,7 +96,7 @@ def extract_chunks_and_imports(file_path: str, language_str: str):
                 "code": "\n".join(lines[node.start_point[0]:node.end_point[0] + 1])
             })
             
-        elif node_type in ['class_definition', 'class_declaration']:
+        elif node_type in ['class_definition', 'class_declaration', 'struct_item', 'impl_item', 'interface_declaration']:
             name = "unknown_class"
             for child in node.children:
                 if child.type == 'identifier' or child.type == 'type_identifier':

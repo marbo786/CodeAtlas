@@ -9,12 +9,13 @@ import time
 import tempfile
 import git
 import shutil
-from chunker import extract_chunks_and_imports
+from chunker import extract_chunks_and_imports, is_language_supported
 from collections import Counter
 import subprocess
 import json
 from pathlib import Path
 import httpx
+import sys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("parser-service")
@@ -24,10 +25,12 @@ logger = logging.getLogger("parser-service")
 import re
 
 API_KEY = os.getenv("PARSER_API_KEY")
-if not API_KEY and not os.getenv("PYTEST_CURRENT_TEST"):
+RUNNING_TESTS = "pytest" in sys.modules or bool(os.getenv("PYTEST_CURRENT_TEST"))
+if not API_KEY and not RUNNING_TESTS:
     raise RuntimeError("PARSER_API_KEY is not set. Refusing to start in non-test environment.")
 elif not API_KEY:
-    logger.warning("PARSER_API_KEY is not set. API will reject all requests unless CORS bypasses it.")
+    API_KEY = "test_api_key"
+    logger.warning("PARSER_API_KEY is not set. Using a test-only API key.")
 
 def validate_github_url(url: str):
     if not re.match(r"^https://github\.com/[\w.-]+/[\w.-]+(?:\.git)?$", url):
@@ -49,6 +52,16 @@ def get_dir_size(path='.'):
     return total
 
 IGNORED_DIRS = {'node_modules', 'dist', 'build', 'venv', 'env', '__pycache__', '.git'}
+LANGUAGE_BY_EXTENSION = {
+    '.py': 'python',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.java': 'java',
+    '.go': 'go',
+    '.rs': 'rust',
+}
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
@@ -85,7 +98,12 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
     if isinstance(exc.detail, dict) and "ok" in exc.detail:
         payload = exc.detail
     else:
-        payload = {"ok": False, "code": exc.status_code, "message": str(exc.detail)}
+        payload = {
+            "ok": False,
+            "code": exc.status_code,
+            "message": str(exc.detail),
+            "detail": exc.detail,
+        }
     return JSONResponse(status_code=exc.status_code, content=payload)
 
 app.add_middleware(
@@ -130,15 +148,9 @@ def _do_parse_and_summary(repo_path: str, identifier: str):
             if file_count >= MAX_FILES_PER_REPO:
                 break
             ext = os.path.splitext(file)[1]
-            lang = None
-            if ext == '.py':
-                lang = 'python'
-            elif ext in ['.js', '.jsx']:
-                lang = 'javascript'
-            elif ext in ['.ts', '.tsx']:
-                lang = 'typescript'
+            lang = LANGUAGE_BY_EXTENSION.get(ext)
                 
-            if lang:
+            if lang and is_language_supported(lang):
                 full_path = os.path.join(root, file)
                 
                 if os.path.getsize(full_path) > MAX_FILE_SIZE:
@@ -179,6 +191,9 @@ def _do_parse_and_summary(repo_path: str, identifier: str):
     if primary_language == 'javascript': primary_language = 'JavaScript'
     elif primary_language == 'typescript': primary_language = 'TypeScript'
     elif primary_language == 'python': primary_language = 'Python'
+    elif primary_language == 'java': primary_language = 'Java'
+    elif primary_language == 'go': primary_language = 'Go'
+    elif primary_language == 'rust': primary_language = 'Rust'
         
     # Detect framework from imports
     framework = "None detected"
@@ -194,6 +209,9 @@ def _do_parse_and_summary(repo_path: str, identifier: str):
     runtime = "Unknown"
     if primary_language in ['JavaScript', 'TypeScript']: runtime = "Node.js"
     elif primary_language == 'Python': runtime = "Python 3.x"
+    elif primary_language == 'Java': runtime = "JVM"
+    elif primary_language == 'Go': runtime = "Go"
+    elif primary_language == 'Rust': runtime = "Rust"
 
     readme_markdown = f"""# Repository Overview
 

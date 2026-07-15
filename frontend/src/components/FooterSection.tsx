@@ -1,9 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { Code, ExternalLink } from 'lucide-react';
-import { buttonVariants } from '@/components/ui/button';
-import { NeonButton } from '@/components/ui/neon-button';
+import { Code } from 'lucide-react';
 import { GlowEffect } from '@/components/motion-primitives/glow-effect';
 import { Card } from '@/components/ui/card';
 import { InteractiveCTA } from '@/components/InteractiveCTA';
@@ -15,6 +13,13 @@ const STACK = [
   { name: 'Qdrant', role: 'Vector Database', desc: 'Stores code embeddings for semantic search and retrieval.' },
   { name: 'PostgreSQL', role: 'Metadata Database', desc: 'Stores relational metadata, schemas, and historical logs.' },
   { name: 'Google Gemini', role: 'AI Reasoning', desc: 'Synthesizes context and provides intelligent conversational answers.' },
+];
+
+const FOOTER_LINKS = [
+  { label: 'GitHub', href: 'https://github.com/marbo786/CodeAtlas', external: true },
+  { label: 'Documentation', href: '#docs' },
+  { label: 'License', href: 'https://github.com/marbo786/CodeAtlas/blob/main/LICENSE', external: true },
+  { label: 'Privacy Policy', href: 'https://github.com/marbo786/CodeAtlas', external: true },
 ];
 
 export function FooterSection() {
@@ -104,18 +109,21 @@ export function FooterSection() {
           
           {/* Main Links */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10 mb-12">
-            <motion.a
-              href="https://github.com/marbo786/CodeAtlas"
-              target="_blank"
-              rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.6, delay: 0.08, ease: "easeOut" }}
-              className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
-            >
-              GitHub
-            </motion.a>
+            {FOOTER_LINKS.map((link, index) => (
+              <motion.a
+                key={link.label}
+                href={link.href}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, delay: 0.08 * (index + 1), ease: "easeOut" }}
+                className="text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
+              >
+                {link.label}
+              </motion.a>
+            ))}
           </div>
 
           {/* Copyright */}

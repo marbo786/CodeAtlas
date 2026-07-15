@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 // Removed ScrollArea import
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useChatStore, ChatMessage } from '@/store/useChatStore';
+import { useRepoStore } from '@/store/useRepoStore';
 
 // --- CONFIGURABLE ANIMATION VARIABLES ---
 // Initial state parameters for the cinematic entrance
@@ -43,6 +44,7 @@ export function ChatSection() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const { messages, status, addMessage, appendStreamChunk, setStatus, sessionId } = useChatStore();
+  const { currentRepoId } = useRepoStore();
 
   const mutation = useMutation({
     mutationFn: async (query: string) => {
@@ -51,7 +53,7 @@ export function ChatSection() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, sessionId }),
+        body: JSON.stringify({ query, sessionId, repoId: currentRepoId }),
       });
 
       if (!res.ok) {
@@ -116,6 +118,9 @@ export function ChatSection() {
     },
     onSettled: () => {
       setStatus('idle');
+    },
+    onError: (error) => {
+      appendStreamChunk(error instanceof Error ? error.message : 'Failed to fetch response from CodeAtlas Agent.');
     },
   });
 

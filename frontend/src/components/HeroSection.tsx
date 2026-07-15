@@ -46,7 +46,7 @@ export function HeroSection() {
       // Use explicit ID if provided, otherwise "latest"
       const returnedId = data?.id || data?.repo_id || 'latest';
       setRepoId(returnedId);
-      toast.success("Repository analysis complete!");
+      toast.success("Repository analysis started. Results will update as the workflow finishes.");
       scrollToNext();
     },
     onError: (error) => {
@@ -64,7 +64,7 @@ export function HeroSection() {
       ingestMutation.mutate(url);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
+        toast.error(error.issues[0].message);
       }
     }
   };
