@@ -213,6 +213,24 @@ CodeAtlas/
 
 ---
 
+## 🚀 Deployment & Constraints
+
+The application is currently deployed on an **AWS EC2 instance (`137.23.56.103`)** using Docker Compose. Due to the infrastructure, there are a few critical constraints to be aware of:
+
+*   **Memory Limitations:** The server is heavily resource-constrained with only **1GB of RAM**.
+*   **Repository Size Limit:** To prevent Out-Of-Memory (OOM) crashes during ingestion, the `parser-service` enforces a strict **100MB maximum repository size limit** (`PARSER_MAX_REPO_SIZE`). If you attempt to ingest a repository containing large unignored directories (like `node_modules/` or `.next/`), the ingestion will fail and surface an error.
+*   **Build Times:** Because of the limited CPU and memory, re-compiling the Next.js frontend production container from scratch on the server takes approximately **35 minutes**.
+
+---
+
+## 🛠️ Recent Architecture Updates & Fixes
+
+*   **n8n Healthcheck Fix:** The `n8n` Docker container healthcheck was updated from `curl` to `wget`. The official n8n image does not ship with `curl`, which caused the container to hang in an "unhealthy" state indefinitely and blocked the frontend container from starting.
+*   **Ingestion Error Bubbling:** The n8n Ingestion Webhook node was reconfigured to **"Respond When Last Node Finishes"**. The Next.js frontend API (`/api/ingest/route.ts`) was also updated to explicitly parse and pass through JSON error payloads. This ensures that background pipeline failures (like the 100MB limit) bubble up to the user as UI toast notifications rather than silently failing.
+*   **Autonomous Agent Context Resolution:** The AI Query Agent's system prompt was upgraded to use a Postgres tool as a middleman. Before answering questions, the LLM autonomously executes `SELECT github_url FROM repos ORDER BY id DESC LIMIT 1` to resolve the UUID and name of the active repository. This eliminated the need for rigid frontend string filters that caused Qdrant to return empty results.
+
+---
+
 <div align="center">
 
 Built by [Marbo](https://github.com/marbo786) · [LinkedIn](https://linkedin.com/in/marbo123)
