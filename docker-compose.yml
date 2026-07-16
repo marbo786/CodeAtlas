@@ -61,6 +61,7 @@ services:
     restart: unless-stopped
     environment:
       - PARSER_API_KEY=${PARSER_API_KEY}
+      - PARSER_MAX_REPO_SIZE=524288000
       - PARSER_ALLOWED_REPO_ROOT=${PARSER_ALLOWED_REPO_ROOT:-/tmp}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
     ports:

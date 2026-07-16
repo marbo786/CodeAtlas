@@ -125,7 +125,12 @@ export function DocsSection() {
     queryFn: async () => {
       if (!currentRepoId) return null;
       const res = await fetch(`/api/repo/${currentRepoId}`);
-      if (!res.ok) throw new Error('Failed to load repository documentation');
+      if (!res.ok) {
+        if (res.status === 404) {
+          useRepoStore.getState().clearRepoId();
+        }
+        throw new Error('Failed to load repository documentation');
+      }
       return res.json();
     },
     enabled: !!currentRepoId,
