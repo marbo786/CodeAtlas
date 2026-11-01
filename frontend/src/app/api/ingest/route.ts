@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const N8N_BASE_URL = process.env.N8N_BASE_URL || 'http://localhost:5678';
+const N8N_BASE_URL = process.env.N8N_BASE_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5678');
 const N8N_INGEST_PATH = process.env.N8N_INGEST_PATH || '/webhook/ingest';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!N8N_BASE_URL) {
+      return NextResponse.json(
+        { error: 'Repository analysis is currently unavailable because the backend is offline.' },
+        { status: 503 }
+      );
+    }
     const body = await request.json();
 
     const n8nUrl = new URL(N8N_INGEST_PATH, N8N_BASE_URL);

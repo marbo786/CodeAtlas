@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const N8N_BASE_URL = process.env.N8N_BASE_URL || 'http://localhost:5678';
+const N8N_BASE_URL = process.env.N8N_BASE_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5678');
 const N8N_READ_API_PATH = process.env.N8N_READ_API_PATH || '/webhook/read-api';
 
 export async function GET(
@@ -8,6 +8,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string | string[] }> }
 ) {
   try {
+    if (!N8N_BASE_URL) {
+      return NextResponse.json(
+        { error: 'Repository data is currently unavailable because the backend is offline.' },
+        { status: 503 }
+      );
+    }
     const paramsResolved = await params;
     const id = Array.isArray(paramsResolved.id) ? paramsResolved.id.join('/') : paramsResolved.id;
     
