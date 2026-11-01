@@ -163,7 +163,7 @@ export function InteractiveCTA() {
             transition={{ delay: 1.2, duration: 0.5 }}
           >
             <a 
-              href="https://github.com/readme" 
+              href="https://github.com/marbo786/CodeAtlas#readme" 
               target="_blank" 
               rel="noopener noreferrer"
               className={buttonVariants({ size: "lg", variant: "outline", className: "rounded-full px-8 h-12 border-border bg-background/50 hover:bg-muted/30 hover:border-border/80 hover:-translate-y-0.5 hover:shadow-[0_0_15px_rgba(255,255,255,0.03)] transition-all duration-300" })}
